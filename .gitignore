@@ -1,0 +1,7 @@
+.DS_Store
+_shared/frames_old_backup/
+_shared/sounds/sources/
+_archive/
+old/
+*.Rhistory
+.claude/

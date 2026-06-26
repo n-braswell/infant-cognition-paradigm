@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Tube exit — animation workspace</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #F0EBE3;
+    font-family: 'Helvetica Neue', Helvetica, sans-serif;
+    color: #2a2a2a;
+    min-height: 100vh;
+    padding: 28px 24px 56px;
+    display: flex; flex-direction: column;
+    align-items: center;
+    gap: 22px;
+  }
+  h1 {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #5a4f44;
+  }
+  .blurb {
+    font-size: 12px;
+    color: #6b5f50;
+    max-width: 760px;
+    text-align: center;
+    line-height: 1.5;
+  }
+
+  /* The stage is a focused, tube-only viewport — wider than tall so
+     the bulge reads, but cropped to just the tube + reveal area
+     (no arena above) so the eye stays on the squeeze. */
+  .stage {
+    background: #fff;
+    border: 2.5px solid #C5B9A8;
+    border-radius: 14px;
+    width: 560px;
+    height: 560px;
+    padding: 24px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .stage svg { display: block; width: 100%; height: 100%; }
+
+  /* Two-row control panel: transport on top, parameter scrubbers below. */
+  .panel {
+    display: flex; flex-direction: column;
+    gap: 14px;
+    background: rgba(255,255,255,0.6);
+    border: 1px solid #C5B9A8;
+    border-radius: 12px;
+    padding: 16px 22px;
+    min-width: 560px;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  button {
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 9px 16px;
+    border-radius: 8px;
+    border: 1.5px solid #B5A898;
+    background: #fff;
+    color: #5a4f44;
+    cursor: pointer;
+    transition: background 0.12s;
+  }
+  button:hover { background: #F7F2E8; }
+  button:active { transform: scale(0.97); }
+  button.primary {
+    background: #5a4f44;
+    color: #fff;
+    border-color: #5a4f44;
+  }
+  button.primary:hover { background: #6b5e51; }
+  button.active {
+    background: #E9E2D2;
+    border-color: #8a7f72;
+  }
+  .group {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px;
+    color: #5a4f44;
+    font-weight: 600;
+  }
+  input[type=range] { width: 240px; }
+  .readout {
+    min-width: 64px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: #2a2a2a;
+    font-size: 12px;
+  }
+  hr {
+    border: none;
+    border-top: 1px dashed #C5B9A8;
+    width: 100%;
+  }
+
+  details {
+    font-size: 12px;
+    color: #5a4f44;
+    width: 100%;
+  }
+  details summary {
+    cursor: pointer;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #6b5f50;
+    padding: 4px 0;
+  }
+  details pre {
+    background: #fff;
+    border: 1px solid #C5B9A8;
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 11px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    color: #2a2a2a;
+    overflow-x: auto;
+    margin-top: 6px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Tube exit · animation workspace</h1>
+<div class="blurb">
+  Isolated stage for the pill squeezing through the elastic tube.
+  Hit <b>Play</b> to run the keyframed sequence (entry → travel → impact →
+  bounce → settle), or use the <b>time</b> slider to scrub through any
+  instant. Below that, four <b>live overrides</b> let you set the four
+  elastic parameters directly for the current moment — handy for
+  picking values to bake into the keyframes.
+</div>
+
+<div class="stage">
+  <svg id="stage" viewBox="0 0 0 0" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet"></svg>
+</div>
+
+<div class="panel">
+  <!-- Transport row -->
+  <div class="row">
+    <button id="play"   class="primary">▶ Play</button>
+    <button id="pause">⏸ Pause</button>
+    <button id="replay">⟲ Replay</button>
+    <button id="loop"   aria-pressed="false">↻ Loop</button>
+    <div class="group">Duration
+      <input type="range" id="dur" min="0.6" max="4.0" step="0.05" value="2.0">
+      <span class="readout" id="dur-out">2.00 s</span>
+    </div>
+  </div>
+
+  <hr>
+
+  <!-- Scrubber row (drives the animation directly) -->
+  <div class="row">
+    <div class="group" style="flex:1; min-width: 320px;">Time
+      <input type="range" id="time" min="0" max="1" step="0.001" value="0" style="flex:1; width:auto;">
+      <span class="readout" id="time-out">0.00 s</span>
+    </div>
+  </div>
+
+  <hr>
+
+  <!-- Override row — live tweakers; check the box to override the
+       keyframed value at the current scrub time. -->
+  <div class="row">
+    <div class="group">
+      <label><input type="checkbox" id="ov-on"> Live override</label>
+    </div>
+  </div>
+  <div class="row">
+    <div class="group">tubePillY
+      <input type="range" id="ov-py" min="290" max="560" step="0.5" value="535">
+      <span class="readout" id="ov-py-out">435</span>
+    </div>
+    <div class="group">scaleX
+      <input type="range" id="ov-sx" min="0.4" max="1.2" step="0.01" value="0.85">
+      <span class="readout" id="ov-sx-out">0.85</span>
+    </div>
+  </div>
+  <div class="row">
+    <div class="group">scaleY
+      <input type="range" id="ov-sy" min="0.6" max="1.4" step="0.01" value="1.00">
+      <span class="readout" id="ov-sy-out">1.00</span>
+    </div>
+    <div class="group">bulge
+      <input type="range" id="ov-bg" min="0" max="20" step="0.5" value="5">
+      <span class="readout" id="ov-bg-out">5</span>
+    </div>
+    <div class="group">taper
+      <input type="range" id="ov-tp" min="10" max="80" step="1" value="56">
+      <span class="readout" id="ov-tp-out">56</span>
+    </div>
+  </div>
+
+  <details>
+    <summary>Keyframes (read-only — edit in source to change baseline)</summary>
+    <pre id="kf-dump"></pre>
+  </details>
+</div>
+
+<script src="_shared/lottery.js?v=12"></script>
+<script>
+  const { renderScene, sceneSVG, TUBE_TOP, TUBE_BOT, REVEAL_CY,
+          PILL_H, ARENA_X, ARENA_W, ARENA_CX } = Lottery;
+
+  // ---------------------------------------------------------------
+  // KEYFRAMES — the tube-exit sequence we care about, in NORMALIZED
+  // time u ∈ [0, 1]. The scrub slider and the play loop both map
+  // through this — so the same sequence stretches over whichever
+  // total duration the user picks.
+  //
+  // Each keyframe has the tube-state fields driving the elastic
+  // animation. Everything else (arena cover, pills) stays fixed
+  // for this isolated workspace: we want only the tube to move.
+  // ---------------------------------------------------------------
+  // u=0 must be BEFORE the pill is fully inside the tube — the eye
+  // should see the pill *enter*. So start with the pill center above
+  // TUBE_TOP (mostly hidden in the arena above, in design.html), then
+  // slide through the tube to the rest position. The tube is ~2× the
+  // pill height, so the pill clearly travels through it.
+  const ABOVE_TUBE = TUBE_TOP - PILL_H * 0.30;   // pill center 28 px above tube top — only bottom edge dips inside
+  const AT_RIM     = TUBE_TOP + PILL_H * 0.05;   // pill center just inside tube top — pill top at the rim
+  const IN_TUBE    = TUBE_TOP + PILL_H * 0.45;   // pill fully inside, upper portion of tube
+  const REST       = REVEAL_CY;
+  // Compute intermediate travel positions evenly spaced between IN_TUBE
+  // and REST so the descent reads as a smooth glide rather than a
+  // single long lerp.
+  const TRAVEL_1   = IN_TUBE + (REST - IN_TUBE) * 0.33;
+  const TRAVEL_2   = IN_TUBE + (REST - IN_TUBE) * 0.66;
+  const TRAVEL_3   = IN_TUBE + (REST - IN_TUBE) * 0.88; // decelerating just before impact
+  // The pill itself stays rigid (scaleX = scaleY = 1 throughout). The
+  // ONLY thing that animates elastically is the TUBE: the bulge grows
+  // where the pill is and the taper length controls how localized vs.
+  // springy the bulge looks.
+  //
+  // The tube is intentionally narrower than the pill (see lottery.js
+  // TUBE_W), so even a `bulge` value of 0 produces a visible widening
+  // — just enough to fit the pill. Treat the `bulge` param as
+  // "extra stretch past the pill edge":
+  //   0  → tube hugs pill tightly (rest pose)
+  //   2-3 → mild stretch while sliding through (the pill is forcing
+  //         the tube open a hair more than its own width)
+  //   5-7 → strong push on impact at the bottom
+  //
+  // Smooth descent uses ~12 keyframes between entry and impact so the
+  // motion doesn't pulse between sparse markers.
+  const tubeKF = [
+    // u,    py,                                         sx,   sy,   bulge, taper, label
+    [0.00,  ABOVE_TUBE,                                  1.00, 1.00,  0, 24, 'pill above rim'],
+    [0.04,  AT_RIM,                                      1.00, 1.00,  1, 30, 'sliding in'],
+    [0.10,  IN_TUBE,                                     1.00, 1.00,  2, 42, 'just inside'],
+    // ---- TRAVEL: gravity-curve sampled densely so motion reads smooth -----
+    [0.16,  IN_TUBE + (REST - IN_TUBE) * 0.08,           1.00, 1.00,  2, 50, 'travel 0.08'],
+    [0.22,  IN_TUBE + (REST - IN_TUBE) * 0.16,           1.00, 1.00,  3, 54, 'travel 0.16'],
+    [0.28,  IN_TUBE + (REST - IN_TUBE) * 0.27,           1.00, 1.00,  3, 56, 'travel 0.27'],
+    [0.34,  IN_TUBE + (REST - IN_TUBE) * 0.40,           1.00, 1.00,  3, 58, 'travel 0.40'],
+    [0.40,  IN_TUBE + (REST - IN_TUBE) * 0.55,           1.00, 1.00,  4, 60, 'travel 0.55'],
+    [0.46,  IN_TUBE + (REST - IN_TUBE) * 0.70,           1.00, 1.00,  4, 60, 'travel 0.70'],
+    [0.52,  IN_TUBE + (REST - IN_TUBE) * 0.84,           1.00, 1.00,  4, 56, 'travel 0.84'],
+    [0.57,  IN_TUBE + (REST - IN_TUBE) * 0.95,           1.00, 1.00,  5, 48, 'pre-impact 0.95'],
+    // ---- IMPACT + RELEASE -------------------------------------------------
+    [0.60,  REST,                                        1.00, 1.00,  6, 40, 'IMPACT'],
+    [0.65,  REST,                                        1.00, 1.00,  2, 52, 'release'],
+    [0.72,  REST,                                        1.00, 1.00,  0, 58, 'settle'],
+    [1.00,  REST,                                        1.00, 1.00,  0, 58, 'rest'],
+  ];
+
+  // Pretty-print KFs into the details panel so the user can see the
+  // structured timeline at a glance.
+  document.getElementById('kf-dump').textContent =
+    tubeKF.map(([u, py, sx, sy, bg, tp, label]) =>
+      `${(u*100).toFixed(1).padStart(5)}%   py=${py.toFixed(1).padStart(6)}` +
+      `   sx=${sx.toFixed(2)}   sy=${sy.toFixed(2)}` +
+      `   bulge=${bg.toString().padStart(4)}` +
+      `   taper=${tp.toString().padStart(3)}` +
+      `   ${label}`
+    ).join('\n');
+
+  // Linear interpolation within each keyframe segment. With the
+  // gravity-sampled positions above, the OVERALL trajectory is
+  // already curved, so any easing-in-out here just adds a "pulse"
+  // at each keyframe. Linear keeps the motion uniform across them.
+  function ease(t) { return t; }
+  function lerp(a, b, t) { return a + (b - a) * t; }
+
+  // Sample the keyframe table at normalized time u.
+  function sampleKF(u) {
+    if (u <= tubeKF[0][0]) return tubeKF[0];
+    const last = tubeKF[tubeKF.length - 1];
+    if (u >= last[0]) return last;
+    for (let i = 0; i < tubeKF.length - 1; i++) {
+      const a = tubeKF[i], b = tubeKF[i + 1];
+      if (u >= a[0] && u < b[0]) {
+        const t = ease((u - a[0]) / (b[0] - a[0]));
+        return [
+          u,
+          lerp(a[1], b[1], t),  // py
+          lerp(a[2], b[2], t),  // sx
+          lerp(a[3], b[3], t),  // sy
+          lerp(a[4], b[4], t),  // bulge
+          lerp(a[5], b[5], t),  // taper
+          '',
+        ];
+      }
+    }
+    return last;
+  }
+
+  // ---------------------------------------------------------------
+  // VIEWPORT — a custom viewBox cropped to the tube + reveal area
+  // so we're not staring at the arena. Vertical crop: from a few px
+  // above the tube top down past the resting pill. Horizontal:
+  // enough room either side for the max bulge.
+  // ---------------------------------------------------------------
+  const PAD_X = 60;
+  // Extra headroom above the tube so the pill is visible while it's
+  // entering from above (otherwise the silhouette gets clipped by the
+  // viewBox at u=0).
+  const PAD_Y_TOP = 80;
+  const PAD_Y_BOT = 60;
+  const VB_X = ARENA_CX - PAD_X;
+  const VB_W = PAD_X * 2;
+  const VB_Y = TUBE_TOP - PAD_Y_TOP;
+  const VB_H = (REVEAL_CY + PILL_H * 0.55 + PAD_Y_BOT) - VB_Y;
+  const tubeViewBox = `${VB_X} ${VB_Y} ${VB_W} ${VB_H}`;
+
+  // ---------------------------------------------------------------
+  // RENDER — build state with whatever override values apply, render
+  // into the SVG element directly.
+  // ---------------------------------------------------------------
+  const stage = document.getElementById('stage');
+  stage.setAttribute('viewBox', tubeViewBox);
+
+  // The 4-pill arena is irrelevant here; render with empty arena so
+  // the cover doesn't paint over the tube top.
+  function renderAt(u) {
+    let [_, py, sx, sy, bg, tp] = sampleKF(u);
+    // Live overrides
+    if (document.getElementById('ov-on').checked) {
+      py = +document.getElementById('ov-py').value;
+      sx = +document.getElementById('ov-sx').value;
+      sy = +document.getElementById('ov-sy').value;
+      bg = +document.getElementById('ov-bg').value;
+      tp = +document.getElementById('ov-tp').value;
+    }
+    const state = {
+      pills: [],
+      arenaCover: 0,
+      hideArena: true,
+      revealedPill: 'silhouette',
+      tubePillY: py,
+      tubePillScaleX: sx,
+      tubePillScaleY: sy,
+      tubeBulge: bg,
+      tubeTaper: tp,
+    };
+    stage.innerHTML = renderScene(state);
+    // Show the values on the override readouts so we can copy them
+    // into source keyframes later.
+    document.getElementById('ov-py-out').textContent = py.toFixed(1);
+    document.getElementById('ov-sx-out').textContent = sx.toFixed(2);
+    document.getElementById('ov-sy-out').textContent = sy.toFixed(2);
+    document.getElementById('ov-bg-out').textContent = bg.toFixed(1);
+    document.getElementById('ov-tp-out').textContent = tp.toFixed(0);
+  }
+
+  // ---------------------------------------------------------------
+  // TRANSPORT — play / pause / replay / loop + duration / time slider.
+  // ---------------------------------------------------------------
+  const timeSlider = document.getElementById('time');
+  const timeOut    = document.getElementById('time-out');
+  const durSlider  = document.getElementById('dur');
+  const durOut     = document.getElementById('dur-out');
+  const playBtn    = document.getElementById('play');
+  const pauseBtn   = document.getElementById('pause');
+  const replayBtn  = document.getElementById('replay');
+  const loopBtn    = document.getElementById('loop');
+
+  let playing = false;
+  let looping = false;
+  let startTs = 0;
+  let raf = null;
+
+  function setU(u) {
+    u = Math.max(0, Math.min(1, u));
+    timeSlider.value = u;
+    const seconds = u * +durSlider.value;
+    timeOut.textContent = seconds.toFixed(2) + ' s';
+    renderAt(u);
+  }
+
+  function loopTick(now) {
+    if (!playing) return;
+    const dur = +durSlider.value * 1000;       // ms
+    let u = (now - startTs) / dur;
+    if (u >= 1) {
+      if (looping) {
+        // restart
+        startTs = now;
+        u = 0;
+      } else {
+        u = 1;
+        playing = false;
+        playBtn.textContent = '▶ Play';
+        playBtn.classList.add('primary');
+      }
+    }
+    setU(u);
+    if (playing) raf = requestAnimationFrame(loopTick);
+  }
+
+  function startPlay(fromZero) {
+    if (raf) cancelAnimationFrame(raf);
+    playing = true;
+    playBtn.textContent = '❚❚ Playing';
+    playBtn.classList.remove('primary');
+    const u0 = fromZero ? 0 : +timeSlider.value;
+    startTs = performance.now() - u0 * +durSlider.value * 1000;
+    raf = requestAnimationFrame(loopTick);
+  }
+  function stopPlay() {
+    playing = false;
+    if (raf) cancelAnimationFrame(raf);
+    playBtn.textContent = '▶ Play';
+    playBtn.classList.add('primary');
+  }
+
+  playBtn.addEventListener('click',   () => startPlay(false));
+  pauseBtn.addEventListener('click',  stopPlay);
+  replayBtn.addEventListener('click', () => startPlay(true));
+  loopBtn.addEventListener('click', () => {
+    looping = !looping;
+    loopBtn.setAttribute('aria-pressed', looping);
+    loopBtn.classList.toggle('active', looping);
+  });
+  timeSlider.addEventListener('input', () => {
+    stopPlay();
+    setU(+timeSlider.value);
+  });
+  durSlider.addEventListener('input', () => {
+    durOut.textContent = (+durSlider.value).toFixed(2) + ' s';
+    setU(+timeSlider.value); // refresh time readout in new units
+  });
+
+  // Wire the override sliders to re-render live.
+  ['ov-on', 'ov-py', 'ov-sx', 'ov-sy', 'ov-bg', 'ov-tp'].forEach(id => {
+    document.getElementById(id).addEventListener('input', () => renderAt(+timeSlider.value));
+  });
+
+  // Keyboard: space = play/pause, ← → = scrub by 2%
+  document.addEventListener('keydown', e => {
+    if (e.key === ' ') { e.preventDefault(); playing ? stopPlay() : startPlay(false); }
+    else if (e.key === 'ArrowRight') setU(+timeSlider.value + 0.02);
+    else if (e.key === 'ArrowLeft')  setU(+timeSlider.value - 0.02);
+  });
+
+  // Initial render at u=0.
+  setU(0);
+</script>
+</body>
+</html>

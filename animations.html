@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Study 3 — Animation workspace</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #F0EBE3;
+    font-family: 'Helvetica Neue', Helvetica, sans-serif;
+    color: #2a2a2a;
+    min-height: 100vh;
+    padding: 32px 24px 48px;
+    display: flex; flex-direction: column;
+    align-items: center;
+    gap: 24px;
+  }
+  h1 {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #5a4f44;
+  }
+  .blurb {
+    font-size: 13px;
+    color: #6b5f50;
+    max-width: 720px;
+    text-align: center;
+    line-height: 1.5;
+  }
+
+  .stage {
+    background: #fff;
+    border: 2.5px solid #C5B9A8;
+    border-radius: 14px;
+    width: 540px;
+    height: 760px;
+    padding: 28px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .stage img {
+    max-width: 100%;
+    max-height: 100%;
+    user-select: none;
+    pointer-events: none;
+    image-rendering: -webkit-optimize-contrast;
+  }
+
+  .controls {
+    display: flex; flex-wrap: wrap;
+    align-items: center; justify-content: center;
+    gap: 14px;
+    background: rgba(255,255,255,0.55);
+    border: 1px solid #C5B9A8;
+    border-radius: 12px;
+    padding: 14px 20px;
+  }
+  .controls .group {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px;
+    color: #5a4f44;
+    font-weight: 600;
+  }
+  .controls button {
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1.5px solid #B5A898;
+    background: #fff;
+    color: #5a4f44;
+    cursor: pointer;
+  }
+  .controls button:hover { background: #F7F2E8; }
+  .controls button:active { transform: scale(0.97); }
+  .controls button.primary {
+    background: #5a4f44;
+    color: #fff;
+    border-color: #5a4f44;
+  }
+  .controls button.primary:hover { background: #6b5e51; }
+  .controls button.active {
+    background: #E9E2D2;
+    border-color: #8a7f72;
+  }
+  .controls input[type=range] { width: 180px; }
+  .readout {
+    min-width: 64px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: #2a2a2a;
+  }
+
+  /* Filmstrip — laid out as a grid of every Nth frame so you can
+     eyeball the entire rotation at a glance. */
+  .strip {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 8px;
+    max-width: 1100px;
+    width: 100%;
+  }
+  .strip-cell {
+    background: #fff;
+    border: 1.5px solid #C5B9A8;
+    border-radius: 6px;
+    padding: 6px;
+    display: flex; flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    aspect-ratio: 3 / 4;
+  }
+  .strip-cell img { width: 100%; height: auto; display: block; }
+  .strip-cell .label {
+    font-size: 10px;
+    font-weight: 700;
+    color: #6b5f50;
+  }
+</style>
+</head>
+<body>
+
+<h1>Pill flip — animation workspace</h1>
+<div class="blurb">
+  Pre-rendered cylinder projection: 37 frames span 0°→180°.
+  Selected pill texture wraps a vertical cylinder; back is the
+  ambiguous gray pill (same outline, sampled body gray).
+</div>
+
+<div class="stage">
+  <img id="frame" src="_shared/frames/yellow_000.png" alt="">
+</div>
+
+<div class="controls">
+  <div class="group">
+    <span>Front:</span>
+    <button data-front="yellow" class="active">Yellow</button>
+    <button data-front="red">Red</button>
+  </div>
+  <div class="group">
+    <button id="flip"   class="primary">Flip → gray</button>
+    <button id="unflip">Flip back</button>
+    <button id="loop">Loop</button>
+  </div>
+  <div class="group">
+    <span>Duration:</span>
+    <input type="range" id="speed" min="200" max="2400" step="50" value="900">
+    <span class="readout" id="speed-out">900 ms</span>
+  </div>
+  <div class="group">
+    <span>Angle:</span>
+    <input type="range" id="angle" min="0" max="180" step="1" value="0">
+    <span class="readout" id="angle-out">0°</span>
+  </div>
+</div>
+
+<div class="strip" id="strip"></div>
+
+<script>
+  const N_FRAMES = 37;
+  const frame  = document.getElementById('frame');
+  const speed  = document.getElementById('speed');
+  const speedO = document.getElementById('speed-out');
+  const angle  = document.getElementById('angle');
+  const angleO = document.getElementById('angle-out');
+
+  let frontKey = 'yellow';
+
+  // Preload all frames so flipping is jank-free.
+  const preloaded = { yellow: [], red: [] };
+  for (const key of ['yellow', 'red']) {
+    for (let i = 0; i < N_FRAMES; i++) {
+      const img = new Image();
+      img.src = `frames/${key}_${String(i).padStart(3, '0')}.png`;
+      preloaded[key].push(img);
+    }
+  }
+
+  function setFrameAngle(deg) {
+    const clamped = Math.max(0, Math.min(180, deg));
+    const idx = Math.round(clamped / 180 * (N_FRAMES - 1));
+    frame.src = `frames/${frontKey}_${String(idx).padStart(3, '0')}.png`;
+    angle.value = clamped;
+    angleO.textContent = Math.round(clamped) + '°';
+  }
+
+  // Pill-front picker.
+  document.querySelectorAll('[data-front]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-front]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      frontKey = btn.dataset.front;
+      setFrameAngle(Number(angle.value));
+      buildStrip();
+    });
+  });
+
+  // Ease in/out (cubic) so the flip starts and ends slowly.
+  function ease(t) { return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2; }
+
+  // Animate angle from `from` → `to` over `ms` using rAF.
+  let rafId = null;
+  function animateAngle(from, to, ms) {
+    if (rafId) cancelAnimationFrame(rafId);
+    const t0 = performance.now();
+    function tick(now) {
+      const t = Math.min(1, (now - t0) / ms);
+      const v = from + (to - from) * ease(t);
+      setFrameAngle(v);
+      if (t < 1) rafId = requestAnimationFrame(tick);
+      else rafId = null;
+    }
+    rafId = requestAnimationFrame(tick);
+  }
+
+  document.getElementById('flip').addEventListener('click', () => {
+    animateAngle(Number(angle.value), 180, Number(speed.value));
+  });
+  document.getElementById('unflip').addEventListener('click', () => {
+    animateAngle(Number(angle.value), 0, Number(speed.value));
+  });
+
+  // Loop = bounce back and forth indefinitely.
+  let loopActive = false;
+  let loopDir = 1;
+  function loopTick() {
+    if (!loopActive) return;
+    const target = loopDir > 0 ? 180 : 0;
+    animateAngle(Number(angle.value), target, Number(speed.value));
+    setTimeout(() => {
+      loopDir *= -1;
+      if (loopActive) loopTick();
+    }, Number(speed.value) + 300);
+  }
+  document.getElementById('loop').addEventListener('click', (e) => {
+    loopActive = !loopActive;
+    e.target.textContent = loopActive ? 'Stop loop' : 'Loop';
+    if (loopActive) loopTick();
+  });
+
+  speed.addEventListener('input', () => speedO.textContent = speed.value + ' ms');
+  angle.addEventListener('input', () => setFrameAngle(Number(angle.value)));
+
+  // Filmstrip overview — every 4th frame so we see 10 across.
+  function buildStrip() {
+    const strip = document.getElementById('strip');
+    const step = Math.ceil((N_FRAMES - 1) / 9);
+    let cells = '';
+    for (let i = 0; i < N_FRAMES; i += step) {
+      const deg = Math.round(i / (N_FRAMES - 1) * 180);
+      cells += `<div class="strip-cell">
+        <img src="frames/${frontKey}_${String(i).padStart(3, '0')}.png" alt="">
+        <span class="label">${deg}°</span>
+      </div>`;
+    }
+    strip.innerHTML = cells;
+  }
+  buildStrip();
+</script>
+</body>
+</html>

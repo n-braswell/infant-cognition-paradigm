@@ -1,0 +1,2896 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Logic and Learning</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  /* html is the actual scroll container, so the snap lives here (not body,
+     which was never the scroller — that's why snapping wasn't engaging). */
+  html {
+    height: 100%;
+    overflow-y: scroll;
+    scroll-snap-type: y mandatory;
+    scroll-behavior: smooth;
+  }
+  body {
+    background: #F0EBE3;
+    font-family: 'Helvetica Neue', Helvetica, sans-serif;
+    color: #2a2a2a;
+    margin: 0;
+  }
+
+  /* ----------------------------------------------------------------
+     Section wrapper — adds a vertical side label on the left, with
+     the section's content flowing to its right. Used for both the
+     Event-types section (2×2 trial cards) and the Design section
+     (Train + converging arrows + Test).
+  ---------------------------------------------------------------- */
+  .section {
+    display: flex;
+    align-items: stretch;
+    width: 100%;
+    max-width: 1780px;
+    gap: 18px;
+    /* Each section is a full-viewport snap page. */
+    height: 100vh;
+    overflow: hidden;
+    box-sizing: border-box;
+    margin: 0 auto;
+    padding: clamp(16px, 3vh, 48px) 28px;
+    scroll-snap-align: start;
+    position: relative;
+  }
+  .section > .section-content {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;   /* vertically center the content within the page */
+  }
+  .side-label {
+    flex: 0 0 auto;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #6b5f50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 0;
+  }
+  .section.design-section .side-label {
+    justify-content: center;
+  }
+
+  /* Dashed horizontal rule between the Event-types section above and
+     the Design section below. */
+  .section-divider { display: none; }   /* sections are now separate snap pages */
+
+  /* Minimalist "scroll down" cue at the bottom of the first page. */
+  .scroll-cue {
+    position: absolute;
+    left: 50%; bottom: 22px;
+    transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    background: none; border: none; cursor: pointer; padding: 6px;
+    color: #6b5f50;
+    animation: cueBob 1.8s ease-in-out infinite;
+  }
+  .scroll-cue svg {
+    width: 30px; height: 30px;
+    fill: none; stroke: currentColor; stroke-width: 2.4;
+    stroke-linecap: round; stroke-linejoin: round; opacity: 0.75;
+  }
+  .scroll-cue:hover svg { opacity: 1; }
+  @keyframes cueBob {
+    0%, 100% { transform: translateX(-50%) translateY(0); }
+    50%      { transform: translateX(-50%) translateY(7px); }
+  }
+  @media (prefers-reduced-motion: reduce) { .scroll-cue { animation: none; } }
+
+  /* ----------------------------------------------------------------
+     Lottery-mode selector — small segmented control floating at the
+     top-center of the first page. Absolutely positioned so it never
+     pushes any other element. Switches ONLY which animation plays in
+     the modal (Spinning = original orbit; Random = bouncing draw).
+  ---------------------------------------------------------------- */
+  .mode-toggle {
+    position: absolute;
+    top: 14px; left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    display: flex; gap: 4px; align-items: center;
+    padding: 4px;
+    background: rgba(255,255,255,0.62);
+    border: 1px solid #C5B9A8;
+    border-radius: 999px;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.07);
+    backdrop-filter: blur(3px);
+    font: 600 13px/1 "Helvetica Neue", Helvetica, sans-serif;
+  }
+  .mode-toggle button {
+    border: none; background: none; cursor: pointer;
+    color: #6b5f50;
+    padding: 6px 15px; border-radius: 999px;
+    transition: background .15s, color .15s;
+  }
+  .mode-toggle button.active { background: #6b5f50; color: #fff; }
+  .mode-toggle button:not(.active):hover { background: rgba(107,95,80,0.12); }
+
+  /* ----------------------------------------------------------------
+     Page header (currently just the hidden picker, room for more).
+  ---------------------------------------------------------------- */
+  .picker {
+    display: none;  /* locked to 2H/2A for now */
+    gap: 10px;
+    align-items: center;
+    padding: 8px 14px;
+    background: rgba(255,255,255,0.5);
+    border: 1px solid #C5B9A8;
+    border-radius: 10px;
+  }
+
+  /* ----------------------------------------------------------------
+     Trial-type 2×2 grid — Visual, Baseline | Supports, Contradicts
+     Each cell is a branded card showing all 4 frames in a row.
+  ---------------------------------------------------------------- */
+  .trial-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  .trial-card {
+    position: relative;
+    background: var(--card-bg, #ECE6DA);
+    border: 6px solid var(--c, #5a4f44);
+    border-radius: 16px;
+    padding: 20px 24px 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .trial-header {
+    display: flex; align-items: center;
+    gap: 10px;
+  }
+  .trial-title {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--c, #5a4f44);
+  }
+  .trial-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+  .thumb {
+    background: #fff;
+    border: 2.5px solid var(--c, #C5B9A8);
+    border-radius: 10px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    padding: 10px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .thumb svg { display: block; width: 100%; height: auto; }
+
+  /* ----------------------------------------------------------------
+     Branch palette
+  ---------------------------------------------------------------- */
+  .branch-visual {
+    --c: #1F7A7A;
+    --card-bg: #DCEDED;
+    --card-stroke: #A8CFCF;
+  }
+  .branch-baseline {
+    --c: #B5722A;
+    --card-bg: #F1E3CD;
+    --card-stroke: #D9BC8E;
+  }
+  .branch-supports {
+    --c: #3F7A45;
+    --card-bg: #DEEAD8;
+    --card-stroke: #ADC8A6;
+  }
+  .branch-contradicts {
+    --c: #8E2E2E;
+    --card-bg: #EFD8D6;
+    --card-stroke: #D2A6A3;
+  }
+
+  /* ----------------------------------------------------------------
+     Play button — small circular button beside each title.
+  ---------------------------------------------------------------- */
+  .play-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    border: 1.5px solid var(--c, #5a4f44);
+    background: rgba(255,255,255,0.6);
+    color: var(--c, #5a4f44);
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.15s, transform 0.1s;
+    vertical-align: middle;
+  }
+  .play-btn:hover { background: #fff; }
+  .play-btn:active { transform: scale(0.94); }
+  .play-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+  .play-btn svg {
+    width: 11px; height: 11px;
+    display: block;
+  }
+
+  /* ----------------------------------------------------------------
+     Animation modal overlay
+  ---------------------------------------------------------------- */
+  /* Full-page window: a white canvas spanning the entire viewport, with the
+     animation scaled to fit and centered both ways. Controls float as a thin
+     vertical bar on the right edge. */
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(20, 18, 14, 0.55);
+    display: none;
+    align-items: center; justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(2px); overflow: hidden;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal-card {
+    background: #fff; border-radius: 0; padding: 0;
+    width: 100%; height: 100%; max-width: none; max-height: none;
+    box-shadow: none; overflow: hidden;
+    position: relative; --c: #5a4f44;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  /* Lock BOTH html and body so nothing scrolls behind the full-screen preview. */
+  html.modal-open, body.modal-open { overflow: hidden; height: 100%; }
+  .modal-title {
+    position: absolute; top: 18px; left: 56px;
+    font-size: 14px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+    color: var(--c); opacity: .7; z-index: 2; pointer-events: none;
+    font-family: system-ui, sans-serif;
+  }
+  .modal-stage { position: absolute; inset: 0; overflow: hidden; }
+  /* Canvas pinned to fill the stage exactly — pure CSS guarantees it can never
+     exceed the viewport, independent of the JS that sets the backing store. */
+  .modal-stage canvas { position: absolute; inset: 0; display: block;
+                        width: 100%; height: 100%; }
+  .modal-close {
+    position: absolute; top: 10px; left: 16px; border: none; background: none;
+    font-size: 38px; font-weight: 900; line-height: 1; color: #5a4f44; cursor: pointer; z-index: 2;
+  }
+  .modal-close:hover { color: #000; }
+  /* Controls live as a thin VERTICAL bar on the right edge so the bottom of
+     the stage — where the pill is dispensed and the firework bursts — stays
+     completely clear. */
+  .modal-controls {
+    position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+    padding: 0; opacity: .55; transition: opacity .15s; z-index: 2;
+  }
+  .modal-controls:hover { opacity: 1; }
+  .modal-controls #scrub { writing-mode: vertical-lr; width: 4px; height: min(46vh, 380px); }
+  /* Play/pause + replay stacked vertically, right next to each other. */
+  .modal-btns { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .modal-replay {
+    border: none; background: none; color: #9a8e7e; font-size: 40px;
+    line-height: 1; cursor: pointer; padding: 2px 6px;
+  }
+  .modal-replay:hover { filter: brightness(1.08); }
+  /* Seed selector — a row of tiny buttons along the bottom; one per vetted seed,
+     plus an "auto" (cycle) button. Only shown in occlusion mode. */
+  .seed-bar {
+    position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
+    display: none; gap: 4px; align-items: center; z-index: 3;
+    padding: 5px 7px; background: rgba(255,255,255,0.6);
+    border: 1px solid #C5B9A8; border-radius: 11px; backdrop-filter: blur(3px);
+  }
+  .seed-bar.show { display: flex; }
+  .seed-bar button {
+    border: none; background: rgba(107,95,80,0.12); color: #6b5f50;
+    min-width: 22px; height: 22px; padding: 0 5px; border-radius: 6px; cursor: pointer;
+    font: 600 11px/1 "Helvetica Neue", Helvetica, sans-serif;
+    transition: background .12s, color .12s;
+  }
+  .seed-bar button:hover { background: rgba(107,95,80,0.26); }
+  .seed-bar button.active { background: #6b5f50; color: #fff; }
+  .seed-bar .seed-auto { font-size: 13px; }
+
+  /* ----------------------------------------------------------------
+     Probability label colors (referenced inside SVG via THEME, but
+     the HTML legend below uses these too)
+  ---------------------------------------------------------------- */
+  .prob-happy { color: #CC9900; }
+  .prob-angry { color: #AA1111; }
+
+  /* ----------------------------------------------------------------
+     Train / Test section — three columns below the divider:
+     Train (4 stacked rows) | Converging arrows | Test (single row).
+     No background swaths; everything sits directly on the page bg.
+  ---------------------------------------------------------------- */
+  .phase-grid {
+    display: grid;
+    grid-template-columns: 5.6fr 0.7fr 3.7fr;
+    gap: 0;
+    width: 100%;
+    /* Content-height so the parent can vertically center it on the page. */
+    flex: 0 0 auto;
+    align-items: stretch;
+    min-height: 0;
+  }
+  .phase-swath {
+    position: relative;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 6px 8px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(4px, 1.2vh, 12px);
+  }
+  .phase-swath.train { --swath-fg: #5a4f3f; }
+  .phase-swath.test  { --swath-fg: #4a4a42; }
+  .phase-label {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: var(--swath-fg, #5a4f44);
+  }
+
+  /* Train sub-groups: four FULL-WIDTH horizontal ROWS stacked
+     vertically. Each row spans the swath's width and the four rows
+     evenly divide the swath's vertical space. */
+  .train-row {
+    display: grid;
+    grid-template-rows: repeat(4, auto);
+    grid-template-columns: 1fr;
+    gap: clamp(4px, 2vh, 30px);
+    flex: 0 0 auto;
+  }
+  .train-sub,
+  .test-content {
+    background: rgba(255,255,255,0.45);
+    border: 1px dashed rgba(120, 110, 95, 0.55);
+    border-radius: 10px;
+    padding: 6px 12px 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    color: rgba(90, 79, 68, 0.85);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  /* Each train row carries an event code (E1–E4) to its left, with the
+     title + thumbnail strip stacked in a body column to its right. */
+  .train-sub {
+    flex-direction: row;
+    align-items: stretch;
+    gap: 14px;
+  }
+  .train-code {
+    flex: 0 0 auto;
+    width: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    color: rgba(55, 46, 36, 0.9);
+  }
+  .train-body {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  /* Per-row title above the strip — the strip below uses the full row width. */
+  .train-sub-title {
+    flex: 0 0 auto;
+    color: rgba(60, 50, 40, 0.95);
+    font-size: 10.5px;
+    line-height: 1.2;
+    letter-spacing: 0.06em;
+  }
+  /* The eight mini-thumbnails fill the rest of the row width. */
+  .mini-strip {
+    flex: 0 0 auto;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    gap: 14px;
+    align-items: start;
+  }
+  .mini-thumb {
+    background: #fff;
+    border: 3px solid var(--mini-stroke, #C5B9A8);
+    border-radius: 7px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    padding: 3px;
+    display: flex; align-items: center; justify-content: center;
+    /* No aspect-ratio: the thumb fills the row's allocated height
+       (set by grid-template-rows on .train-row) and the SVG
+       letterboxes inside via its default preserveAspectRatio. */
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .mini-thumb svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    /* SVG's default preserveAspectRatio="xMidYMid meet" keeps the
+       scene undistorted and centered inside whatever box we give it. */
+  }
+  /* Train mini-thumbs: lock the FRAME to the machine's own aspect (arena+tube,
+     ~484x496) so it hugs the scene instead of letterboxing it in a too-tall box. */
+  .mini-strip .mini-thumb {
+    aspect-ratio: 484 / 496;
+    height: auto;
+    align-self: center;
+  }
+  .mini-strip .mini-thumb svg { height: auto; }
+  /* Tint each mini-thumb's border to match the originating branch
+     so the alternating-trial pattern is readable at a glance. */
+  .mini-thumb.k-visual      { --mini-stroke: #1F7A7A; }
+  .mini-thumb.k-baseline    { --mini-stroke: #B5722A; }
+  .mini-thumb.k-supports    { --mini-stroke: #3F7A45; }
+  .mini-thumb.k-contradicts { --mini-stroke: #8E2E2E; }
+  /* Third-column highlight — bold outline ring signals the key frame. */
+  .mini-thumb.key-frame {
+    outline: 3px solid #8a7560;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 5px rgba(138, 117, 96, 0.18), 0 2px 8px rgba(0,0,0,0.10);
+    background: rgba(138, 117, 96, 0.07);
+  }
+  /* Test-strip thumbs encode the reveal identity: green outline for
+     the "happy" (yellow pill) reveal, red outline for the "angry"
+     (red pill) reveal. Thicker than train borders so the VOE contrast
+     reads at a glance. */
+  .mini-thumb.k-test-happy {
+    --mini-stroke: #2E8B3E;
+    border-width: 6px;
+  }
+  .mini-thumb.k-test-angry {
+    --mini-stroke: #B22A2A;
+    border-width: 6px;
+  }
+
+  /* Test side mirrors the train side's container so the percentage
+     math below resolves against the same available area. The single
+     test row is vertically centered inside it. */
+  .test-row {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    flex: 1;
+  }
+  .test-content {
+    width: 100%;
+    height: auto;
+    background: rgba(255,255,255,0.45);
+    border: 1px dashed rgba(120, 110, 95, 0.55);
+    border-radius: 10px;
+    padding: 6px 12px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .test-content .mini-strip {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    justify-items: center;
+    align-items: center;
+  }
+
+  /* ----------------------------------------------------------------
+     Converging arrows — middle column of the phase-grid. Four lines
+     emerge from the right edges of the train rows, meet at a single
+     point in the middle of the column, and one line continues out to
+     the test thumb on the right. Drawn with JS so the row centers
+     match the actual layout.
+  ---------------------------------------------------------------- */
+  .converge {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    /* The label row above each phase-swath is `phase-label` (22px)
+       plus the swath's gap (12px) plus its own padding (6px top).
+       Reserve roughly that vertical block at the top so the SVG
+       starts where the train rows actually start. */
+    padding: 6px 0 8px;
+  }
+  .converge-spacer {
+    /* Matches the phase-label height + gap above .train-row, so the
+       SVG below begins at the same Y as the first train row. */
+    height: 34px;
+    flex: 0 0 auto;
+  }
+  .converge-svg-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+    position: relative;
+  }
+  .converge-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    overflow: visible;
+  }
+
+  /* ----------------------------------------------------------------
+     Design section header + counterbalance switches
+  ---------------------------------------------------------------- */
+  .design-header {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-bottom: clamp(6px, 1.5vh, 24px);
+  }
+  .design-title-row {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+  .design-cb-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .design-heading {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: #5a4f44;
+  }
+  .cb-bar {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  .cb-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .cb-label {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: #8a7f72;
+    white-space: nowrap;
+  }
+  .cb-section-label {
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: #8a7f72;
+  }
+  .cb-toggle {
+    display: flex;
+    border-radius: 999px;
+    overflow: hidden;
+    border: 2px solid #C5B9A8;
+    background: #ece6dc;
+  }
+  .cb-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    padding: 7px 14px;
+    border: none;
+    background: transparent;
+    color: #8a7f72;
+    cursor: pointer;
+    transition: background 0.15s, color 0.12s;
+    white-space: nowrap;
+  }
+  .cb-btn.active {
+    background: #6b5f50;
+    color: #f5f0e8;
+  }
+  .cb-btn:hover:not(.active) {
+    background: rgba(107,95,80,0.12);
+    color: #5a4f44;
+  }
+  .cb-dot {
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+  .cb-seq {
+    display: flex;
+    gap: 3px;
+    align-items: center;
+  }
+  .cb-seq-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+  @keyframes thumb-flip {
+    0%   { transform: scaleX(1); }
+    45%  { transform: scaleX(0); }
+    55%  { transform: scaleX(0); }
+    100% { transform: scaleX(1); }
+  }
+  .thumb-flipping {
+    animation: thumb-flip 0.35s ease-in-out;
+  }
+  @keyframes border-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(120, 110, 95, 0.0); }
+    35%  { box-shadow: 0 0 0 5px rgba(120, 110, 95, 0.45); }
+    100% { box-shadow: 0 0 0 0 rgba(120, 110, 95, 0.0); }
+  }
+  .border-pulsing {
+    animation: border-pulse 0.45s ease-out;
+  }
+</style>
+</head>
+<body>
+
+<div class="picker" id="picker">
+  <span>Lottery</span>
+  <button data-dist="2h2a" class="active">2 Happy / 2 Angry</button>
+</div>
+
+<!-- Animation modal — hidden by default, opens on play button click. -->
+<div class="modal-backdrop" id="modal-backdrop" role="dialog" aria-modal="true">
+  <div class="modal-card" id="modal-card">
+    <button class="modal-close" id="modal-close" aria-label="Close">&times;</button>
+    <div class="modal-title" id="modal-title">Visual</div>
+    <div class="modal-stage" id="modal-stage"><canvas id="anim-canvas"></canvas></div>
+    <div class="modal-controls">
+      <div class="modal-btns">
+        <button class="modal-replay" id="modal-playpause" title="Play / Pause (space)" aria-label="Play or pause">&#x23f8;</button>
+        <button class="modal-replay" id="modal-replay" title="Replay" aria-label="Replay">&#x21bb;</button>
+      </div>
+      <input type="range" id="scrub" min="0" max="1" step="0.001" value="0" tabindex="-1">
+    </div>
+    <!-- Seed selector (occlusion mode only): audition every vetted draw. -->
+    <div class="seed-bar" id="seed-bar" role="group" aria-label="Seed selector"></div>
+  </div>
+</div>
+
+<div class="section events-section">
+  <div class="mode-toggle" id="mode-toggle" role="group" aria-label="Lottery mode">
+    <button type="button" data-mode="spin" class="active">Spinning Lottery</button>
+    <button type="button" data-mode="occlusion">Occlusion</button>
+  </div>
+  <span class="side-label">Event types</span>
+  <div class="section-content">
+    <div class="trial-grid" id="trial-grid"></div>
+  </div>
+  <button class="scroll-cue" aria-label="Scroll to storyboard"
+          onclick="document.querySelector('.design-section').scrollIntoView({behavior:'smooth'})">
+    <svg viewBox="0 0 24 24"><path d="M5 9l7 7 7-7"/></svg>
+  </button>
+</div>
+
+<div class="section-divider"></div>
+
+<div class="section design-section">
+  <div class="section-content">
+    <div class="design-header">
+      <div class="design-title-row">
+        <span class="design-heading">Design</span>
+        <div class="design-cb-wrap">
+          <span class="cb-section-label">Counterbalanced Factors</span>
+          <div class="cb-bar" id="cb-bar">
+            <div class="cb-group">
+              <span class="cb-label">Frequent Color</span>
+              <div class="cb-toggle">
+                <button class="cb-btn active" id="cb-yellow"><span class="cb-dot" style="background:#C9A000"></span>Yellow</button>
+                <button class="cb-btn" id="cb-red"><span class="cb-dot" style="background:#C03028"></span>Red</button>
+              </div>
+            </div>
+            <div class="cb-group">
+              <span class="cb-label">Test Order</span>
+              <div class="cb-toggle">
+                <button class="cb-btn active" id="cb-order-a">A &nbsp;<span class="cb-seq" id="seq-a"></span></button>
+                <button class="cb-btn" id="cb-order-b">B &nbsp;<span class="cb-seq" id="seq-b"></span></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="phase-grid">
+      <section class="phase-swath train">
+        <span class="phase-label">Train</span>
+        <div class="train-row" id="train-row"></div>
+      </section>
+      <div class="converge">
+        <div class="converge-spacer"></div>
+        <div class="converge-svg-wrap">
+          <svg class="converge-svg" id="converge-svg" preserveAspectRatio="none"></svg>
+        </div>
+      </div>
+      <section class="phase-swath test">
+        <span class="phase-label">Test</span>
+        <div class="test-row">
+          <div class="test-content">
+            <div class="mini-strip" id="test-strip"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>window.LOTTERY_ASSET_BASE = '';</script>  <!-- this page is at the repo root, not one folder deep -->
+<script src="_shared/lottery.js?v=17"></script>
+<script>
+const { tightSceneSVG: sceneSVG, sceneSVG: rawSceneSVG,
+        TUBE_TOP, TUBE_BOT, REVEAL_CY, REVEAL_CY_OUT, PILL_H } = Lottery;
+// Full scene viewBox — same as the modal/event-type thumbs so the dispensed pill
+// is always visible in training thumbnails.
+const machineVB = () => Lottery.tightViewBox ? Lottery.tightViewBox()
+  : `${Lottery.ARENA_X - 12} ${Lottery.ARENA_Y - 12} ${Lottery.ARENA_W + 24} ${(TUBE_BOT - Lottery.ARENA_Y) + 24}`;
+
+// ---- Lottery distribution (locked to 2H/2A) ----
+const DISTRIBUTIONS = {
+  '2h2a': ['happy', 'happy', 'angry', 'angry'],
+};
+let currentDist = '2h2a';
+
+// ----------------------------------------------------------------
+// Branch definitions. Each branch is a FULL 4-frame sequence:
+//   1. Display    — both pills visible, no cover
+//   2. Exit       — arena covered, silhouette in tube
+//   3. Deduction  — half-cover; what's revealed differs per branch
+//   4. Reveal     — halo flash; pill identity may be hidden
+//
+// For 2H/2A: half-cover exposes 2 slots. Supports shows BOTH angry
+// pills remaining (→ dispensed must be happy, 100%). Contradicts
+// shows BOTH happy (→ dispensed angry, 100%). Baseline and Visual
+// show 2 silhouettes (no identity info, 50/50 probability).
+// ----------------------------------------------------------------
+const STARTING = DISTRIBUTIONS[currentDist];
+
+// ====================================================================
+// STORYBOARD / TRAIN / TEST THUMBNAILS — new architecture.
+//
+// There is no separate hand-authored frame list anymore. Every static
+// thumbnail is a snapshot of the SAME declarative timeline that drives
+// the modal animation: stateAtTime(buildKeyframes(key), T) at a chosen
+// beat T, rendered as a crisp static SVG via sceneSVG(). The timeline
+// (TIMELINE / PH / at / buildKeyframes) is the single source of truth;
+// it is defined in the engine block further down, so the render calls
+// run at the very end of the script (after that block executes).
+// ====================================================================
+const BRANCH_META = [
+  { key: 'visual',      title: 'Visual',                    cls: 'branch-visual' },
+  { key: 'baseline',    title: 'No Deduction',              cls: 'branch-baseline' },
+  { key: 'supports',    title: 'Supported by Deduction',    cls: 'branch-supports' },
+  { key: 'contradicts', title: 'Contradicted by Deduction', cls: 'branch-contradicts' },
+];
+
+// The four storyboard beats, expressed as times on the timeline. Wrapped
+// in a function because at()/PH live in the engine block below (they do
+// not exist yet at the point this is parsed).
+function STORY_TIMES() {
+  return {
+    display:   at('introSettle', 0.5),  // four pills face-up in the arena
+    exit:      at('tubeHold',    0.5),   // one gone → silhouette resting in the tube
+    deduction: at('revealHold',  0.44),  // deduction pills rotated face-out (at POP 2 peak)
+    reveal:    at('endHold',      0.4),  // dispensed pill out of the tube
+  };
+}
+
+// Full animation state at time t for a branch — computeState, the SAME
+// function the live modal uses, so a thumbnail shows the pills exactly
+// where the animation places them (square / orbit formation, the pill
+// sinking into the tube, etc.), not the old arena-row layout.
+function branchStateAt(key, t) {
+  return computeState(buildKeyframes(key), CFG[key].exitSlot, t);
+}
+
+// ----------------------------------------------------------------
+// Probability of the dispensed (gray) pill being happy vs angry,
+// given the starting lottery and what the branch reveals.
+// ----------------------------------------------------------------
+function dispensedProbs(branchKey) {
+  let H = STARTING.filter(p => p === 'happy').length;
+  let A = STARTING.filter(p => p === 'angry').length;
+  if (branchKey === 'supports')    A -= 2;
+  if (branchKey === 'contradicts') H -= 2;
+  const total = H + A;
+  if (total === 0) return { happy: 0, angry: 0 };
+  return { happy: H / total, angry: A / total };
+}
+
+// ----------------------------------------------------------------
+// Storyboard: the 2×2 grid of trial cards (4 beats per condition).
+// ----------------------------------------------------------------
+const grid = document.getElementById('trial-grid');
+function thumbHTML(state) { return `<div class="thumb">${sceneSVG(state)}</div>`; }
+
+// Occlusion-mode storyboard (4 panels) for one condition, sampled from the
+// occlusion engine with a fixed representative seed:
+//   1. start — four pills face-up (2 yellow / 2 red), same as before
+//   2. occluder closed + the chosen pill resting in the tube
+//   3. occluder back open, two pills turned face-out (the deduction reveal),
+//      the pill still in the tube
+//   4. same positions as #3 but those two pills turned back to backs, and the
+//      pill dispensed (same final beat as before)
+function occlusionThumbStates(branchKey) {
+  const saved = rState;
+  // Sample from the same draw the live animation is pinned to (R_PREFERRED[0] →
+  // the seed-bar's "Seed 7"), so panels 3 & 4 show the resting field the modal
+  // actually plays rather than the old R_SEEDS[0] ("Seed 1") draw.
+  const seedIdx = R_PREFERRED[0];
+  const seed = R_SEEDS[seedIdx];
+  const sim = buildRandomSim(seed);
+  const cfg = CFG[branchKey] || CFG.visual;
+  const rmap = pickChosenAndMap(sim, cfg);
+  rState = { seed, sim, rmap, seedIdx };
+  const kf = buildKeyframesRandom(branchKey, rmap);
+  const at4 = t => computeStateRandom(kf, rmap.chosen, t);
+  const display = branchStateAt(branchKey, STORY_TIMES().display);   // face-up 2Y2R (unchanged)
+  const closed  = { ...at4(atR('occHoldA', 0.5)), occluderFrac: 1,    // closed door + pill in tube
+                    revealedPill: 'silhouette', tubePillY: REVEAL_CY, tubePillScaleX: 1, tubePillScaleY: 1, tubeBulge: 3, tubeTaper: PILL_DRAW_H / 2 };
+  const reveal  = at4(atR('revealHold', 0.44));                      // door open, two pills face-out, pill in tube
+  const back    = { ...at4(atR('endHold', 0.4)), burst: 0.45 };      // turned back + dispensed
+  rState = saved;
+  return [display, closed, reveal, back];
+}
+
+function renderTrials() {
+  const T = STORY_TIMES();
+  grid.innerHTML = '';
+  BRANCH_META.forEach(br => {
+    const card = document.createElement('section');
+    card.className = `trial-card ${br.cls}`;
+
+    const states = (lotteryMode === 'occlusion')
+      ? occlusionThumbStates(br.key)
+      : [
+          branchStateAt(br.key, T.display),
+          branchStateAt(br.key, T.deduction),
+          branchStateAt(br.key, T.exit),
+          { ...branchStateAt(br.key, T.reveal), burst: 0.45 },
+        ];
+
+    const strip = states.map(f => thumbHTML(f)).join('');
+
+    const playBtn = `
+      <button class="play-btn" data-play="${br.key}"
+              aria-label="Play ${br.title} animation">
+        <svg viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg">
+          <path d="M 2.5 1.5 L 8.5 5 L 2.5 8.5 Z" fill="currentColor"/>
+        </svg>
+      </button>`;
+
+    card.innerHTML = `
+      <div class="trial-header">
+        <span class="trial-title">${br.title}</span>
+        ${playBtn}
+      </div>
+      <div class="trial-strip">${strip}</div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+// ====================================================================
+// TRAIN groups — 4 horizontal rows of 8 mini-thumbnails each. Each
+// thumbnail merges the deduction-beat arena (which pills remained /
+// were revealed) with the dispensed pill from the reveal beat — the
+// composite an infant effectively sees by the end of one trial.
+// ====================================================================
+const TRAIN_GROUPS = [
+  { code: 'E1', title: 'Full Visual Learning',     pattern: ['visual'] },
+  { code: 'E2', title: 'Deductive Learning',       pattern: ['visual', 'supports'] },
+  { code: 'E3', title: 'Baseline Visual Learning', pattern: ['visual', 'baseline'] },
+  { code: 'E4', title: 'Deductive Unlearning',     pattern: ['visual', 'contradicts'] },
+];
+const TRAIN_TRIAL_COUNT = 8;
+
+function mergedTrainState(key) {
+  const T = STORY_TIMES();
+  const ded = branchStateAt(key, T.deduction);   // arena showing the deduction reveal
+  const rev = branchStateAt(key, T.reveal);      // dispensed pill out of the tube
+  const exitSlot = (CFG[key] || CFG.visual).exitSlot;
+  const dedPills = ded.pills.map((p, i) => i === exitSlot ? null : p);
+  return { ...ded,
+    pills: dedPills,
+    revealedPill: rev.revealedPill, coverRevealedPill: rev.coverRevealedPill,
+    tubePillY: rev.tubePillY, tubeBulge: rev.tubeBulge, tubeTaper: rev.tubeTaper,
+    fireworks: 0, probs: null };
+}
+function trainThumbHTML(key) {
+  return `<div class="mini-thumb k-${key}">${rawSceneSVG(mergedTrainState(key), machineVB())}</div>`;
+}
+function trainThumbHTMLKeyFrame(key) {
+  const state = mergedTrainState(key);
+  const infrequentKind = swapKind(frequentKind);
+  const overridden = { ...state, revealedPill: infrequentKind, coverRevealedPill: false };
+  return `<div class="mini-thumb k-${key} key-frame">${rawSceneSVG(overridden, machineVB())}</div>`;
+}
+function renderTrainGroups() {
+  const root = document.getElementById('train-row');
+  root.innerHTML = TRAIN_GROUPS.map(group => {
+    const trials = Array.from({ length: TRAIN_TRIAL_COUNT }, (_, i) => {
+      const key = group.pattern[i % group.pattern.length];
+      return i === 2 ? trainThumbHTMLKeyFrame(key) : trainThumbHTML(key);
+    }).join('');
+    return `
+      <div class="train-sub">
+        <div class="train-code">${group.code}</div>
+        <div class="train-body">
+          <div class="train-sub-title">${group.title}</div>
+          <div class="mini-strip">${trials}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ====================================================================
+// TEST strip — 6 visual trials with a fixed reveal pattern. Each thumb
+// is the visual condition's deduction-beat arena with the dispensed
+// pill overridden to the pattern's identity (always shown — VOE coding).
+// ====================================================================
+// TEST_PATTERN_A/B and currentTestPattern() are defined in the counterbalance block below.
+
+function testState(revealedKind) {
+  const T = STORY_TIMES();
+  const ded = branchStateAt('visual', T.deduction);
+  const rev = branchStateAt('visual', T.reveal);
+  const exitSlot = CFG.visual.exitSlot;
+  const dedPills = ded.pills.map((p, i) => i === exitSlot ? null : p);
+  return { ...ded,
+    pills: dedPills,
+    revealedPill: revealedKind, coverRevealedPill: false,
+    tubePillY: rev.tubePillY, tubeBulge: rev.tubeBulge, tubeTaper: rev.tubeTaper, fireworks: 0 };
+}
+function testThumbHTML(revealedKind) {
+  const cls = revealedKind === 'happy' ? 'k-test-happy' : 'k-test-angry';
+  return `<div class="mini-thumb ${cls}">${sceneSVG(testState(revealedKind))}</div>`;
+}
+function renderTestStrip() {
+  const strip = document.getElementById('test-strip');
+  strip.innerHTML = currentTestPattern().map(testThumbHTML).join('');
+}
+
+// ====================================================================
+// VOE quantity — NOT a bare algebraic subtraction. It reads as:
+//   VOE = average looking time on the THREE red (angry) reveal frames
+//         − average looking time on the THREE green (happy) reveal frames
+// Each term shows its three REAL test frames (containing the actual pill
+// items), grouped under an eye + "avg. looking time" caption so the
+// "average over the three" reading is explicit.
+// ====================================================================
+
+// ====================================================================
+// Converging-arrows SVG — four lines emerging from the right edge of
+// each train row, meeting at a center point, then a single line out
+// to the test thumb. Recomputed on resize so the start/end Y values
+// always match the actual rendered row centers.
+// ====================================================================
+function renderConvergeArrows() {
+  const svg     = document.getElementById('converge-svg');
+  const wrap    = svg.parentElement;
+  const trainEl = document.getElementById('train-row');
+  const testEl  = document.querySelector('.test-content');
+  if (!svg || !wrap || !trainEl || !testEl) return;
+
+  const wrapRect  = wrap.getBoundingClientRect();
+  const trainSubs = trainEl.querySelectorAll('.train-sub');
+  if (!trainSubs.length || wrapRect.width === 0 || wrapRect.height === 0) return;
+
+  // SVG drawn in pixel space matching the wrap so lines and arrowhead
+  // don't get distorted by aspect-ratio scaling.
+  const W = wrapRect.width;
+  const H = wrapRect.height;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+  // Vertical centers of each train row, expressed in wrap-local coords.
+  const startYs = Array.from(trainSubs).map(sub => {
+    const r = sub.getBoundingClientRect();
+    return (r.top + r.height / 2) - wrapRect.top;
+  });
+
+  // Test thumb vertical center, expressed in wrap-local coords.
+  const testRect = testEl.getBoundingClientRect();
+  const endY = (testRect.top + testRect.height / 2) - wrapRect.top;
+
+  // Convergence point — true horizontal center of the column,
+  // vertical midpoint of the 4 train rows (not pinned to endY).
+  const cx = W * 0.5;
+  const cy = (startYs[0] + startYs[startYs.length - 1]) / 2;
+
+  // Build the SVG. Fan lines from (0, yi) → (cx, cy), then one angled
+  // shaft from (cx, cy) → (W, endY) with an arrowhead.
+  const stroke = '#8a7570';
+  const sw = 2;
+  const lines = startYs.map(y =>
+    `<path d="M 0 ${y} L ${cx} ${cy}" stroke="${stroke}" stroke-width="${sw}" fill="none" stroke-linecap="round" stroke-linejoin="round" />`
+  ).join('');
+  // Single segment to the test thumb, angled toward endY, with arrowhead.
+  const shaft = `<path d="M ${cx} ${cy} L ${W - 10} ${endY}"
+    stroke="${stroke}" stroke-width="${sw}" fill="none" stroke-linecap="round" stroke-linejoin="round" />`;
+  const head = `<polygon points="${W},${endY} ${W - 10},${endY - 7}
+    ${W - 10},${endY + 7}" fill="${stroke}" />`;
+
+  svg.innerHTML = lines + shaft + head;
+}
+
+// Render on load + on resize. Also re-run after a tick to make sure
+// layout has settled (mini-thumbs SVGs can shift heights slightly).
+window.addEventListener('load',   renderConvergeArrows);
+window.addEventListener('resize', renderConvergeArrows);
+requestAnimationFrame(() => requestAnimationFrame(renderConvergeArrows));
+
+// ====================================================================
+// VISUAL EVENT ANIMATION (modal) — CANVAS ENGINE
+// Declarative TIMELINE, closed-form physics, supersampled canvas
+// renderer. Geometry comes from lottery.js.
+// (PILL_H, TUBE_TOP, TUBE_BOT, REVEAL_CY, REVEAL_CY_OUT and STARTING are
+// already declared earlier in this script, so they are NOT re-declared here.)
+// ====================================================================
+const L = window.Lottery;
+const {
+  THEME, PILL_W, PILL_DRAW_W, PILL_DRAW_H,
+  ARENA_X, ARENA_Y, ARENA_W, ARENA_H, ARENA_CX, ARENA_CY,
+  TUBE_X, TUBE_W, TUBE_H,
+  REVEAL_CX,
+} = L;
+
+// ===================================================================
+// 1) DECLARATIVE TIMELINE — named segments with RELATIVE durations.
+// ===================================================================
+const TIMELINE = [
+  { name: 'introSettle', dur: 0.30 },  // pills shown face-up
+  { name: 'yellowDance', dur: 1.90 },  // happy wiggle + spin (seq_happy plays from here)
+  { name: 'yellowJump',  dur: 1.00 },  // big jump on the "yay" (vocal lands at seq 1.9s = here)
+  { name: 'beat',        dur: 0.25 },
+  { name: 'redDance',    dur: 1.90 },  // stiff agitated stomp (seq_angry plays from here)
+  { name: 'redShake',    dur: 1.00 },  // head-shake "no" on the male exclamation (vocal at seq 1.9s = here)
+  { name: 'dancesDone',  dur: 0.15 },
+  { name: 'premixPause', dur: 0.55 },
+  { name: 'flySquare',   dur: 1.50 },  // fly from the dance row into the diamond formation (facing)
+  { name: 'turn',        dur: 1.275 }, // slow, deliberate 3D turnaround in place at the formation
+  { name: 'postFlip',   dur: 1.00 },  // hold after flip completes, before orbit begins
+  { name: 'orbit',       dur: 3.60 },  // then orbit the circle clockwise (already backs)
+  { name: 'settle',      dur: 0.47 },  // brief hold (chosen pill at bottom) after the orbit
+  // The chosen pill drops into the tube FIRST (slide whistle) and just SITS at the
+  // bottom — no vibration yet. Only AFTER it lands does the deduction reveal play;
+  // a split second after that, the vibration begins.
+  { name: 'exit',        dur: 0.80 },  // the chosen pill starts its slide-whistle drop
+  { name: 'descent',     dur: 1.40 },  // continues down to the bottom of the tube
+  { name: 'tubeHold',    dur: 0.45 },  // pill rests at the bottom (silhouette), no vibration
+  { name: 'dedSettle',   dur: 1.20 },  // pause BEFORE the reveal turn (pill waiting in the tube)
+  { name: 'reveal',      dur: 0.60 },  // deduction pills rotate face-out
+  { name: 'revealHold',  dur: 2.50 },  // lead delay → three synchronized pops (ding ding ding) → trail delay
+  { name: 'rehide',      dur: 0.60 },  // rotate back to hidden
+  { name: 'postReveal',  dur: 1.00 },  // split-second pause AFTER they turn back, before the vibration
+  { name: 'preSpit',     dur: 2.50 },  // suspense build — pill vibrates, growing (matches 2.5s vibrate)
+  { name: 'spit',        dur: 0.12 },  // tube SNAPS the pill out — fast
+  { name: 'dispense',    dur: 0.65 },  // identity reveal + firework
+  { name: 'endHold',     dur: 1.50 },
+];
+const PH = {};
+{ let acc = 0; for (const p of TIMELINE) { PH[p.name] = { t0: acc, t1: acc + p.dur, dur: p.dur }; acc += p.dur; } }
+const DURATION = TIMELINE.reduce((a, p) => a + p.dur, 0);
+const at = (name, frac = 0) => PH[name].t0 + frac * PH[name].dur;
+
+// ===================================================================
+// 2) ANIMATION KNOBS — geometry + motion params in one block.
+// ===================================================================
+const ANIM = {
+  orbit:   { radius: 95, turns: 5 },
+  physics: { speed: 165 },                          // px/s for float + fly-in
+  exit:    { sinkY: TUBE_TOP + PILL_H * 0.35 },
+  silhouette: { fill: '#33425A', outline: '#000000', lineWidth: 2.0 },
+  suspense: { amp: 2.8 },                            // px peak side-to-side buzz before the spit
+};
+
+// Per-branch config: which arena slot exits (its kind = dispensed
+// identity), which slots reveal during deduction, whether the
+// dispensed identity is hidden.
+// The PHYSICAL animation is identical in all four conditions: slot 0 ALWAYS
+// exits, so the orbit alignment / spin / descent / timing are byte-identical.
+// Only IDENTITY changes — `layout` recolors the arena so the pill that needs to
+// come out is the slot-0 pill, and the deduction reveals the right colors.
+// `contradicts` is just the mirror layout (so an angry pill exits slot 0).
+const CFG_BASE = {
+  visual:      { exitSlot: 0, layout: ['happy', 'happy', 'angry', 'angry'],                                               revealSlots: [1, 3], dispensed: 'happy', cover: false },
+  baseline:    { exitSlot: 0, layout: ['happy', 'happy', 'angry', 'angry'],                                               revealSlots: [1, 3], dispensed: 'happy', cover: true  },
+  supports:    { exitSlot: 0, layout: ['happy', 'happy', 'angry', 'angry'], revealLayout: ['happy', 'angry', 'happy', 'angry'], revealSlots: [1, 3], dispensed: 'happy', cover: true  },
+  contradicts: { exitSlot: 0, layout: ['happy', 'happy', 'angry', 'angry'], revealLayout: ['angry', 'happy', 'angry', 'happy'], revealSlots: [1, 3], dispensed: 'angry', cover: true  },
+};
+const CFG = { visual: { ...CFG_BASE.visual }, baseline: { ...CFG_BASE.baseline },
+              supports: { ...CFG_BASE.supports }, contradicts: { ...CFG_BASE.contradicts } };
+
+// ---- Counterbalance state ----
+let frequentKind = 'happy';  // 'happy' = yellow frequent; 'angry' = red frequent
+let testOrderB   = false;    // false = order A, true = order B
+
+const TEST_PATTERN_A = ['happy', 'angry', 'angry', 'happy', 'happy', 'angry'];
+const TEST_PATTERN_B = ['angry', 'happy', 'happy', 'angry', 'angry', 'happy'];
+
+function swapKind(k) { return k === 'happy' ? 'angry' : 'happy'; }
+
+function applyCFG() {
+  const swap = frequentKind === 'angry';
+  for (const key of ['visual', 'baseline', 'supports', 'contradicts']) {
+    const b = CFG_BASE[key];
+    CFG[key] = swap
+      ? { ...b, dispensed: swapKind(b.dispensed) }
+      : { ...b };
+  }
+}
+
+function currentTestPattern() {
+  return testOrderB ? TEST_PATTERN_B : TEST_PATTERN_A;
+}
+const TITLES = { visual: 'Visual condition', baseline: 'Baseline condition',
+                 supports: 'Supports condition', contradicts: 'Contradicts condition' };
+const COLORS = { visual: '#1F7A7A', baseline: '#B5722A', supports: '#3F7A45', contradicts: '#8E2E2E' };
+
+// ===================================================================
+// 3) KEYFRAMES — scene-state channel. Times come from PH/at().
+// ===================================================================
+const lerp = (a, b, t) => a + (b - a) * t;
+const easeInOut = (t) => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+
+function buildKeyframes(branchKey) {
+  const cfg = CFG[branchKey] || CFG.visual;
+  const pills = cfg.layout || STARTING;
+  const allFace = pills.map(k => ({ kind: k, rot: 0 }));
+  const allBack = pills.map(k => ({ kind: k, rot: 180 }));
+  // Intermediate turnaround angles so the 3D roll plays through each degree evenly
+  // (instead of easeInOut whipping past 90° too fast and reading as a flat snap).
+  const allTurn45  = pills.map(k => ({ kind: k, rot: 45 }));
+  const allTurn90  = pills.map(k => ({ kind: k, rot: 90 }));
+  const allTurn135 = pills.map(k => ({ kind: k, rot: 135 }));
+  const sansExit = allBack.map((p, i) => i === cfg.exitSlot ? null : p);
+  const revealed = sansExit.map((p, i) => (p && cfg.revealSlots.includes(i)) ? { ...p, rot: 0 } : p);
+  // Same as `revealed` but the revealed pills carry a scale pop (sc) — used for a
+  // small bounce mid-hold. Empty revealSlots (visual/baseline) → no popped pills.
+  const revealedPop = sansExit.map((p, i) => (p && cfg.revealSlots.includes(i)) ? { ...p, rot: 0, sc: 1.16 } : p);
+  // ARENA reveal: the deduction now happens BEFORE the pill drops, so ALL four
+  // pills are still present (the chosen one waits at the bottom as a hidden back),
+  // not the sansExit/in-tube set. revealSlots flip face-out (+ pop variant).
+  // revealLayout (if present) secretly swaps identities at this point — safe because
+  // all pills are backs during orbit so the swap is invisible to the viewer.
+  const revPills = (cfg.revealLayout || cfg.layout).map(k => ({ kind: k, rot: 180 }));
+  const revealedArena = revPills.map((p, i) => cfg.revealSlots.includes(i) ? { ...p, rot: 0 } : p);
+  // BOTH revealed pills pop TOGETHER, twice (ding, ding) — each pill pops twice.
+  const revealedArenaPop = revPills.map((p, i) => cfg.revealSlots.includes(i) ? { ...p, rot: 0, sc: 1.18 } : p);
+  // The chosen pill now drops BEFORE the deduction, so during the reveal the arena
+  // shows only the three remaining pills (the chosen one already rests in the tube
+  // as a silhouette). These sansExit variants drop the exit slot from the reveal sets.
+  const dropExit = arr => arr.map((p, i) => i === cfg.exitSlot ? null : p);
+  const revPillsSansExit         = dropExit(revPills);
+  const revealedArenaSansExit    = dropExit(revealedArena);
+  const revealedArenaPopSansExit = dropExit(revealedArenaPop);
+  const zero = pills.map(() => ({ dx: 0, dy: 0 }));
+  const base = { pills: allFace, revealedPill: null, shakeX: 0, fireworks: 0, burst: 0,
+                 yellowDx: 0, yellowDy: 0, yellowScaleX: 1, yellowScaleY: 1,
+                 redDx: 0, redDy: 0, redScaleX: 1, redScaleY: 1, redTilt: 0, pillOffsets: zero };
+
+  const inTube = (extra = {}) => ({ ...base, pills: sansExit, revealedPill: 'silhouette',
+    tubePillY: REVEAL_CY, tubePillScaleX: 1, tubePillScaleY: 1, tubeBulge: 0, tubeTaper: 58, ...extra });
+
+  // Exit-snap config: the pill pops out ALREADY in its final orientation — no
+  // turn animation. "turn" (non-cover) branches are face-forward (rot 0);
+  // "no-turn" (cover) branches stay back (rot 180). The endHold/dispense-end
+  // keyframes restore revealedPill for the static SVG thumbnails.
+  const orient  = cfg.cover ? 180 : 0;
+  const endPill = { revealedPill: cfg.cover ? 'silhouette' : cfg.dispensed };
+
+  const START = TUBE_TOP + PILL_H * 0.35, REST = REVEAL_CY;
+  const SP = REST - START;
+  const T0 = at('descent', 0), TS = at('descent', 1), TH = at('tubeHold', 1);
+  const segAt = u => T0 + u * (TS - T0);
+  const tf = (t, py, bulge, taper) => ({ t, state: { ...base, pills: sansExit, revealedPill: 'silhouette',
+    tubePillY: py, tubePillScaleX: 1, tubePillScaleY: 1, tubeBulge: bulge, tubeTaper: taper } });
+  const flowT0 = T0, flowT1 = TS;
+  const flowY = tt => START + (REST - START) * Math.min(1, Math.max(0, (tt - flowT0) / (flowT1 - flowT0)));
+  const flow = (tt, extra = {}) => ({ t: tt, state: inTube({ tubePillY: flowY(tt), tubeBulge: 3, tubeTaper: 54, ...extra }) });
+
+  const kf = [
+    { t: at('introSettle', 0), state: { ...base } },
+    { t: at('introSettle', 1), state: { ...base } },
+    // --- YELLOW (happy): rocks back and forth for the whole dance, then a big jump on
+    // the "yay". (No spin — the face→back flip is the separate `turn` phase.) ---
+    { t: at('yellowDance', 0.00), state: { ...base } },
+    { t: at('yellowDance', 0.12), state: { ...base, yellowDx: 9,  yellowTilt: 12,  yellowScaleX: 1.05, yellowScaleY: 0.95 } },
+    { t: at('yellowDance', 0.26), state: { ...base, yellowDx: -9, yellowTilt: -12, yellowScaleX: 1.05, yellowScaleY: 0.95 } },
+    { t: at('yellowDance', 0.40), state: { ...base, yellowDx: 9,  yellowTilt: 12 } },
+    { t: at('yellowDance', 0.54), state: { ...base, yellowDx: -9, yellowTilt: -12 } },
+    { t: at('yellowDance', 0.68), state: { ...base, yellowDx: 9,  yellowTilt: 12 } },
+    { t: at('yellowDance', 0.82), state: { ...base, yellowDx: -9, yellowTilt: -12 } },
+    { t: at('yellowDance', 0.92), state: { ...base, yellowDx: 0,  yellowTilt: 0 } },
+    { t: at('yellowDance', 1.00), state: { ...base } },
+    { t: at('yellowJump', 0.12), state: { ...base, yellowScaleX: 1.12, yellowScaleY: 0.85, yellowDy: 8 } },   // crouch
+    { t: at('yellowJump', 0.42), state: { ...base, yellowScaleX: 0.88, yellowScaleY: 1.16, yellowDy: -70 } }, // leap (apex on the "yay")
+    { t: at('yellowJump', 0.72), state: { ...base, yellowScaleX: 1.12, yellowScaleY: 0.85, yellowDy: 6 } },   // land
+    { t: at('yellowJump', 1.00), state: { ...base } },
+    { t: at('beat', 1.00), state: { ...base } },
+    // --- RED (angry): seething rage-tremble — puffed up (wide/short), shuddering fast
+    // side to side with a hard forward lean, NOT a loose happy sway. Then a head-shake. ---
+    { t: at('redDance', 0.00), state: { ...base } },
+    { t: at('redDance', 0.05), state: { ...base, redDx: 5,  redTilt: 3,  redScaleX: 1.06, redScaleY: 0.94 } }, // puff up + shudder
+    { t: at('redDance', 0.11), state: { ...base, redDx: -5, redTilt: -3, redScaleX: 1.06, redScaleY: 0.94 } },
+    { t: at('redDance', 0.17), state: { ...base, redDx: 5,  redTilt: 3,  redScaleX: 1.06, redScaleY: 0.94 } },
+    { t: at('redDance', 0.23), state: { ...base, redDx: -5, redTilt: -3, redScaleX: 1.06, redScaleY: 0.94 } },
+    { t: at('redDance', 0.29), state: { ...base, redDx: 5,  redTilt: 3,  redScaleX: 1.06, redScaleY: 0.94 } },
+    { t: at('redDance', 0.35), state: { ...base, redDx: -5, redTilt: -3, redScaleX: 1.06, redScaleY: 0.94 } },
+    { t: at('redDance', 0.41), state: { ...base, redDx: 5,  redTilt: 3,  redScaleX: 1.06, redScaleY: 0.94 } },
+    { t: at('redDance', 0.47), state: { ...base, redDx: -5, redTilt: -3, redScaleX: 1.06, redScaleY: 0.94 } },
+    { t: at('redDance', 0.53), state: { ...base, redDx: 5,  redTilt: 3,  redScaleX: 1.06, redScaleY: 0.94 } },
+    { t: at('redDance', 0.59), state: { ...base, redDx: -5, redTilt: -3, redScaleX: 1.06, redScaleY: 0.94 } },
+    { t: at('redDance', 0.65), state: { ...base, redDx: 5,  redTilt: 3,  redScaleX: 1.06, redScaleY: 0.94 } },
+    { t: at('redDance', 0.71), state: { ...base, redDx: -5, redTilt: -3, redScaleX: 1.06, redScaleY: 0.94 } },
+    { t: at('redDance', 0.77), state: { ...base, redDx: 5,  redTilt: 3,  redScaleX: 1.06, redScaleY: 0.94 } },
+    { t: at('redDance', 0.83), state: { ...base, redDx: -5, redTilt: -3, redScaleX: 1.06, redScaleY: 0.94 } },
+    { t: at('redDance', 0.89), state: { ...base, redDx: 4,  redTilt: 2,  redScaleX: 1.05, redScaleY: 0.95 } },
+    { t: at('redDance', 0.95), state: { ...base, redDx: 0,  redTilt: 0 } },
+    { t: at('redDance', 1.00), state: { ...base } },
+    { t: at('redShake', 0.12), state: { ...base, redTilt: 18 } },   // head-shake "no"
+    { t: at('redShake', 0.28), state: { ...base, redTilt: -18 } },
+    { t: at('redShake', 0.44), state: { ...base, redTilt: 15 } },
+    { t: at('redShake', 0.60), state: { ...base, redTilt: -15 } },
+    { t: at('redShake', 0.76), state: { ...base, redTilt: 10 } },
+    { t: at('redShake', 1.00), state: { ...base, redTilt: 0 } },
+    { t: at('dancesDone', 1.00), state: { ...base } },
+    { t: at('premixPause', 1.00), state: { ...base } },
+    { t: at('flySquare', 1.00), state: { ...base } },         // fly in FACING
+    // …then the 3D turnaround, stepped through each angle so the roll is visible.
+    { t: at('turn', 0.12), state: { ...base } },                              // 0°
+    { t: at('turn', 0.34), state: { ...base, pills: allTurn45 } },           // 45°
+    { t: at('turn', 0.56), state: { ...base, pills: allTurn90 } },           // 90° (edge-on)
+    { t: at('turn', 0.78), state: { ...base, pills: allTurn135 } },          // 135°
+    { t: at('turn', 1.00), state: { ...base, pills: allBack } },             // 180°
+    { t: at('settle',     1.00), state: { ...base, pills: allBack } },
+    // FIRST the slide-whistle drop: the chosen pill exits + descends into the tube
+    // and rests at the bottom (it just SITS — no vibration yet).
+    { t: at('exit', 1.00), state: { ...base, pills: allBack } },
+    flow(segAt(0.0)), flow(segAt(0.5)), flow(TS), flow(TH),
+    // THEN the deduction reveal, with the chosen pill RESTING in the tube — only the
+    // three remaining pills are in the arena (sansExit), the silhouette below.
+    { t: at('dedSettle',  1.00), state: inTube({ pills: sansExit }) },
+    { t: at('reveal',     1.00), state: inTube({ pills: revealedArenaSansExit }) },    // flip face-out
+    { t: at('revealHold', 0.26), state: inTube({ pills: revealedArenaSansExit }) },    // LEAD delay (sit face-out)
+    { t: at('revealHold', 0.32), state: inTube({ pills: revealedArenaPopSansExit }) }, // POP 1 — both pills (ding)
+    { t: at('revealHold', 0.39), state: inTube({ pills: revealedArenaSansExit }) },    // down
+    { t: at('revealHold', 0.44), state: inTube({ pills: revealedArenaPopSansExit }) }, // POP 2 — both pills (ding)
+    { t: at('revealHold', 0.51), state: inTube({ pills: revealedArenaSansExit }) },    // down
+    { t: at('revealHold', 0.56), state: inTube({ pills: revealedArenaPopSansExit }) }, // POP 3 — both pills (ding)
+    { t: at('revealHold', 0.63), state: inTube({ pills: revealedArenaSansExit }) },    // down
+    { t: at('revealHold', 1.00), state: inTube({ pills: revealedArenaSansExit }) },    // TRAIL delay (sit settled)
+    { t: at('rehide',     1.00), state: inTube({ pills: revPillsSansExit }) },         // rotate back — keep revealLayout kind so no snap
+    // A split second later (postReveal) the vibration begins, building to the spit.
+    flow(at('preSpit', 1.00), { fireworks: 0 }),
+    // POP — INSTANTANEOUS. The preSpit keyframe above holds the pill resting in
+    // the tube; one render frame later (<1 frame gap) it is fully OUT at its
+    // final spot, already in its final orientation (face for "turn", back for
+    // "no-turn"), with the firework igniting on this exact frame. No travel, no
+    // overshoot, no turn — a clean cut. The face pill's position is ALWAYS the
+    // final REVEAL_CY_OUT, so it can never appear mid-flight.
+    { t: at('spit', 0.10), state: pop(REVEAL_CY_OUT, orient, 0.12) },
+    // `burst` is a MONOTONIC 0→1 explosion progress (particles fade as it →1).
+    { t: at('dispense', 0.50), state: pop(REVEAL_CY_OUT, orient, 0.55) },
+    // Restore `revealedPill` to its thumbnail-correct value (cover → silhouette)
+    // for the static SVG snapshots that sample endHold; on-top pill coincides.
+    { t: at('dispense', 1.00), state: pop(REVEAL_CY_OUT, orient, 0.82, endPill) },
+    { t: at('endHold',  1.00), state: pop(REVEAL_CY_OUT, orient, 1,    endPill) },
+  ];
+  return kf.filter(k => k && k.t !== undefined);
+
+  // The exiting pill drawn ON TOP of the tube (always visible) during the
+  // snap + dispense. `revealedPill` carries the kind so it renders as a back
+  // pill until exitRot flips it; cover branches never flip (identity hidden).
+  function pop(y, rot, burst = 0, extra) {
+    return { ...base, pills: sansExit, revealedPill: cfg.dispensed,
+      exitY: y, exitRot: rot, tubePillY: REVEAL_CY_OUT,
+      tubePillScaleX: 1, tubePillScaleY: 1, tubeBulge: 0, tubeTaper: 56,
+      fireworks: 0, burst, ...extra };
+  }
+}
+
+function tweenStates(a, b, t) {
+  const out = {};
+  const numKeys = ['arenaCover','shakeX','fireworks','redTilt','yellowTilt','yellowDx','yellowDy','yellowScaleX','yellowScaleY',
+    'redDx','redDy','redScaleX','redScaleY','tubePillY','tubePillScaleX','tubePillScaleY','tubeBulge','tubeTaper','burst','exitY','exitRot'];
+  for (const k of numKeys) {
+    const av = a[k], bv = b[k];
+    if (typeof av === 'number' && typeof bv === 'number') out[k] = lerp(av, bv, t);
+    else if (typeof bv === 'number') out[k] = bv;
+    else if (typeof av === 'number') out[k] = av;
+  }
+  out.revealedPill = (t < 1) ? a.revealedPill : b.revealedPill;
+  if (b.revealedPill === a.revealedPill) out.revealedPill = a.revealedPill;
+  else out.revealedPill = t < 0.5 ? a.revealedPill : b.revealedPill;
+  out.coverRevealedPill = t < 0.5 ? a.coverRevealedPill : b.coverRevealedPill;
+  const pa = a.pills || [], pb = b.pills || [];
+  const n = Math.max(pa.length, pb.length);
+  out.pills = [];
+  for (let i = 0; i < n; i++) {
+    const x = pa[i], y = pb[i];
+    if (!x && !y) { out.pills[i] = null; continue; }
+    if (!x || !y) { out.pills[i] = (t < 0.5 ? x : y) || null; continue; }
+    const xr = (typeof x === 'object') ? x.rot : (x === 'silhouette' ? 180 : 0);
+    const yr = (typeof y === 'object') ? y.rot : (y === 'silhouette' ? 180 : 0);
+    const kind = (typeof y === 'object') ? y.kind : (typeof x === 'object' ? x.kind : x);
+    const xs = (typeof x === 'object' && typeof x.sc === 'number') ? x.sc : 1;
+    const ys = (typeof y === 'object' && typeof y.sc === 'number') ? y.sc : 1;
+    out.pills[i] = { kind, rot: lerp(xr, yr, t), sc: lerp(xs, ys, t) };
+  }
+  out.pillOffsets = (t < 0.5 ? a.pillOffsets : b.pillOffsets) || a.pillOffsets || b.pillOffsets;
+  return out;
+}
+
+function stateAtTime(kf, t) {
+  if (t <= kf[0].t) return kf[0].state;
+  const last = kf[kf.length - 1];
+  if (t >= last.t) return last.state;
+  for (let i = 0; i < kf.length - 1; i++) {
+    const a = kf[i], b = kf[i + 1];
+    if (t >= a.t && t < b.t) return tweenStates(a.state, b.state, easeInOut((t - a.t) / (b.t - a.t)));
+  }
+  return last.state;
+}
+
+// ===================================================================
+// 4) PHYSICS — mixing-phase sim.
+// ===================================================================
+function pillExtents() {
+  const { PILL_DRAW_W, PILL_DRAW_H, PILL_VISIBLE_RATIO_W, PILL_VISIBLE_RATIO_H } = L;
+  return { RH: (PILL_DRAW_W * PILL_VISIBLE_RATIO_W) / 2, RV: (PILL_DRAW_H * PILL_VISIBLE_RATIO_H) / 2 };
+}
+// Pills render as VERTICAL CAPSULES (stadium): half-width RH, half-height RV, with a
+// corner radius = RH. So a pill is a vertical "spine" segment of half-length RV-RH,
+// inflated by RH in every direction. Collision MUST use this shape — the verified PNG
+// outline has flat parallel sides (constant width across its middle third), so an
+// inscribed ellipse mismatches it: it under-detects offset hits (overlap on the black
+// lines) while forcing a global pad that over-separates aligned hits (visible gap).
+// Returns spine-to-spine distance D, the TRUE contact normal (a->b), and the surface
+// gap (D - 2*RH; <0 = capsule outlines cross). Single source of truth for the
+// occlusion-bounce collision AND the seed-vetting lane/spacing metrics.
+function capsuleContact(ax, ay, bx, by) {
+  const { RH, RV } = pillExtents(), spine = Math.max(0, RV - RH);
+  const dx = bx - ax, dy = by - ay;
+  const dyEff = dy - Math.max(-2 * spine, Math.min(2 * spine, dy));  // 0 while spines overlap in y; else the cap-to-cap offset
+  let D = Math.hypot(dx, dyEff), nx = 1, ny = 0;
+  if (D > 1e-6) { nx = dx / D; ny = dyEff / D; } else { D = 0; }       // degenerate (coincident) -> push horizontally
+  return { D, RH, gap: D - 2 * RH, nx, ny };
+}
+function arenaBounds(wallPad = 0) {
+  const { RH, RV } = pillExtents(); const s = THEME.arenaSW / 2 + wallPad;
+  return { minX: ARENA_X + s + RH, maxX: ARENA_X + ARENA_W - s - RH,
+           minY: ARENA_Y + s + RV, maxY: ARENA_Y + ARENA_H - s - RV };
+}
+function initPhysics() {
+  const SP = ANIM.physics.speed;
+  const make = (slotX, vx, vy) => ({ slotX, slotY: ARENA_CY, x: slotX, y: ARENA_CY, vx, vy, speed: Math.hypot(vx, vy) });
+  return [
+    make(ARENA_CX - 145,  SP * 0.95,  SP * 0.55),
+    make(ARENA_CX -  70,  SP * 1.00, -SP * 0.45),
+    make(ARENA_CX +  70, -SP * 1.00,  SP * 0.50),
+    make(ARENA_CX + 145, -SP * 0.95, -SP * 0.55),
+  ];
+}
+function normalizeSpeed(p) { const m = Math.hypot(p.vx, p.vy); if (m > 0) { p.vx = p.vx / m * p.speed; p.vy = p.vy / m * p.speed; } }
+function stepPhysics(pills, dt, collPad = 1, wallPad = 0) {
+  const { minX, maxX, minY, maxY } = arenaBounds(wallPad);
+  for (const p of pills) {
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    if (p.x < minX) { p.x = minX; p.vx = Math.abs(p.vx); }
+    if (p.x > maxX) { p.x = maxX; p.vx = -Math.abs(p.vx); }
+    if (p.y < minY) { p.y = minY; p.vy = Math.abs(p.vy); }
+    if (p.y > maxY) { p.y = maxY; p.vy = -Math.abs(p.vy); }
+  }
+  // Pill-pill: resolve as TRUE capsules (see capsuleContact). Separate to exact
+  // surface contact along the real normal — no inscribed-ellipse skew, no global
+  // over-separation. collPad is a hair of clearance (~1.0) so resting outlines sit
+  // adjacent without visually merging; it is NOT the old 8% overlap fudge.
+  for (let i = 0; i < pills.length; i++) for (let j = i + 1; j < pills.length; j++) {
+    const a = pills[i], b = pills[j];
+    const c = capsuleContact(a.x, a.y, b.x, b.y);
+    const minSep = 2 * c.RH * collPad;
+    if (c.D < minSep) {
+      const pen = minSep - c.D;
+      a.x -= c.nx * pen / 2; a.y -= c.ny * pen / 2;
+      b.x += c.nx * pen / 2; b.y += c.ny * pen / 2;
+      const dvx = b.vx - a.vx, dvy = b.vy - a.vy, dvn = dvx * c.nx + dvy * c.ny;
+      if (dvn < 0) { a.vx += dvn * c.nx; a.vy += dvn * c.ny; b.vx -= dvn * c.nx; b.vy -= dvn * c.ny; }
+      normalizeSpeed(a); normalizeSpeed(b);
+    }
+  }
+}
+
+// ===================================================================
+// 5) CANVAS RENDERER — mirrors lottery.js renderScene().
+// ===================================================================
+const canvas = document.getElementById('anim-canvas');
+const ctx = canvas.getContext('2d');
+const [VBX, VBY, VBW, VBH] = L.tightViewBox().split(' ').map(Number);
+// Mini-thumbs now use the full tightViewBox (so dispensed pill is visible), update aspect-ratio.
+document.head.insertAdjacentHTML('beforeend',
+  `<style>.mini-strip .mini-thumb { aspect-ratio: ${VBW} / ${VBH}; }</style>`);
+
+const FRAMES = {};
+function framePath(kind, rotDeg) {
+  const k = (kind === 'angry') ? 'red' : 'yellow';
+  const idx = Math.max(0, Math.min(36, Math.round(rotDeg / 5)));
+  return `_shared/frames/${k}_${String(idx).padStart(3, '0')}.png`;
+}
+let framesReady = 0, framesTotal = 0;
+function preloadFrames() {
+  for (const k of ['yellow', 'red']) for (let i = 0; i <= 36; i++) {
+    const path = `_shared/frames/${k}_${String(i).padStart(3, '0')}.png`;
+    const img = new Image(); framesTotal++;
+    img.onload = () => { framesReady++; };
+    img.src = path; FRAMES[path] = img;
+  }
+}
+preloadFrames();
+window.framesReady = () => framesReady >= framesTotal;
+
+function roundRect(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+const PILL_OUTLINE = { srcW: 1086, srcH: 1542, outerW: 1004, outerH: 1418, cxSrc: 552, cySrc: 739, splitSrc: 909, thick: 41 };
+const PILL_PATTERN = (() => {
+  const p = document.createElement('canvas'); p.width = p.height = 9;
+  const g = p.getContext('2d');
+  g.fillStyle = '#5E5E5E'; g.fillRect(0, 0, 9, 9);
+  g.strokeStyle = '#46423C'; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(-1, 7); g.lineTo(7, -1); g.moveTo(2, 10); g.lineTo(10, 2); g.stroke();
+  return ctx.createPattern(p, 'repeat');
+})();
+function pillCapsule(cx, cy, sx = 1, sy = 1) {
+  const O = PILL_OUTLINE, scX = PILL_DRAW_W / O.srcW, scY = PILL_DRAW_H / O.srcH;
+  const vw = (O.outerW - O.thick) * scX * sx, vh = (O.outerH - O.thick) * scY * sy;
+  const ox = cx + (O.cxSrc - O.srcW / 2) * scX * sx, oy = cy + (O.cySrc - O.srcH / 2) * scY * sy;
+  return { ox, oy, vw, vh, r: Math.min(vw, vh) / 2, lw: O.thick * scY, splitY: oy + (O.splitSrc - O.cySrc) * scY * sy };
+}
+function capPath(c) { ctx.beginPath(); ctx.roundRect(c.ox - c.vw / 2, c.oy - c.vh / 2, c.vw, c.vh, c.r); }
+// NEW pill art (cut-out faces + transparent back). The turnaround is built from
+// these at draw time: the front face per kind foreshortens to an edge-on sliver
+// at 90deg, then swaps to the NEW back expanding out — the same angle-based roll
+// logic, no pre-baked frames, no procedural crosshatch back.
+const NEW_FACE = {
+  happy: Object.assign(new Image(), { src: '_shared/happy_cut.png' }),
+  angry: Object.assign(new Image(), { src: '_shared/angry_cut.png' }),
+};
+const NEW_BACK = Object.assign(new Image(), { src: '_shared/back_new.png' });
+function drawPill(kind, cx, cy, sx = 1, sy = 1, rot = 0, tilt = 0) {
+  // 3D rotation = the pre-generated in-between frames. framePath() picks the
+  // nearest 5deg frame in _shared/frames/{yellow,red}_NNN.png (000=face .. 036=back).
+  // Each frame already bakes the full 3D turn INCLUDING the identity-neutral gray
+  // back (036), so we just draw the frame — no procedural crosshatch overlay.
+  // Swapping pills = REGENERATE these frames (pill-3d-generator.html).
+  const img = FRAMES[framePath(kind, rot)];
+  if (!img || !img.complete || !img.naturalWidth) return;
+  const w = PILL_DRAW_W * sx, h = PILL_DRAW_H * sy;
+  const tilted = Math.abs(tilt) > 0.01;
+  if (tilted) { ctx.save(); ctx.translate(cx, cy); ctx.rotate(tilt * Math.PI / 180); ctx.translate(-cx, -cy); }
+  ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h);
+  if (tilted) ctx.restore();
+}
+// Offscreen scratch canvas used to recolor the pill PNG into a flat silhouette
+// while preserving its EXACT alpha footprint.
+function drawSilhouette(cx, cy, sx = 1, sy = 1) {
+  // Draw the pill BACK exactly like the arena pills do (drawPill at rot 180 →
+  // textured crosshatch capsule), so the back's texture is fully visible through
+  // the clear tube and matches the rest of the scene. Identity stays hidden
+  // because both colours render the same gray textured back.
+  drawPill('happy', cx, cy, sx, sy, 180);
+}
+
+function tubePathD(state, close = true) {
+  const pillY = (typeof state.tubePillY === 'number') ? state.tubePillY : REVEAL_CY;
+  const gap = (typeof state.tubeBulge === 'number') ? state.tubeBulge : 4;
+  const cx = ARENA_CX, y0 = TUBE_TOP, y1 = TUBE_BOT, tubeHX = TUBE_W / 2;
+  const pw = (PILL_DRAW_W * L.PILL_VISIBLE_RATIO_W) / 2;
+  const ph = (PILL_DRAW_H * L.PILL_VISIBLE_RATIO_H) / 2;
+  const cap = Math.min(pw, ph);
+  const bodyHalf = ph - cap;
+  const bodyW = pw + gap;
+  const transEnd = ph + 4;
+  const smooth = f => f * f * (3 - 2 * f);
+  const wallAt = (y) => {
+    const dyc = Math.abs(y - pillY);
+    if (dyc <= bodyHalf) return bodyW;
+    if (dyc <= transEnd) return bodyW + (tubeHX - bodyW) * smooth((dyc - bodyHalf) / (transEnd - bodyHalf));
+    return tubeHX;
+  };
+  // Horizontal buzz: the tube centerline bows to follow the rattling pill, fading
+  // to 0 away from the pill so the top (arena) and bottom opening stay put.
+  const shakeX = (typeof state.tubeShakeX === 'number') ? state.tubeShakeX : 0;
+  const centerAt = (y) => {
+    if (shakeX === 0) return cx;
+    const dyc = Math.abs(y - pillY);
+    const b = dyc <= bodyHalf ? 1 : dyc <= transEnd ? 1 - smooth((dyc - bodyHalf) / (transEnd - bodyHalf)) : 0;
+    return cx + shakeX * b;
+  };
+  const step = 3, ys = [];
+  for (let y = y0; y < y1; y += step) ys.push(y);
+  ys.push(y1);
+  let d = `M ${centerAt(ys[0]) - wallAt(ys[0])} ${ys[0]}`;
+  for (let i = 1; i < ys.length; i++) d += ` L ${centerAt(ys[i]) - wallAt(ys[i])} ${ys[i]}`;
+  for (let i = ys.length - 1; i >= 0; i--) d += ` L ${centerAt(ys[i]) + wallAt(ys[i])} ${ys[i]}`;
+  return close ? d + ' Z' : d;
+}
+
+// Returns the tube's wall half-width at TUBE_TOP — mirrors wallAt(TUBE_TOP)
+// from tubePathD so the ring/border gap can track the stretched tube mouth.
+function tubeTopHalfW(state) {
+  if (!state || state.revealedPill !== 'silhouette') return TUBE_W / 2;
+  const pillY = (typeof state.tubePillY === 'number') ? state.tubePillY : REVEAL_CY;
+  const gap   = (typeof state.tubeBulge === 'number') ? state.tubeBulge : 4;
+  const pw = (PILL_DRAW_W * L.PILL_VISIBLE_RATIO_W) / 2;
+  const ph = (PILL_DRAW_H * L.PILL_VISIBLE_RATIO_H) / 2;
+  const cap = Math.min(pw, ph);
+  const bodyHalf = ph - cap;
+  const bodyW    = pw + gap;
+  const transEnd = ph + 4;
+  const tubeHX   = TUBE_W / 2;
+  const smooth   = f => f * f * (3 - 2 * f);
+  const dyc = Math.abs(TUBE_TOP - pillY);
+  if (dyc <= bodyHalf) return bodyW;
+  if (dyc <= transEnd) return bodyW + (tubeHX - bodyW) * smooth((dyc - bodyHalf) / (transEnd - bodyHalf));
+  return tubeHX;
+}
+
+// Confetti-style burst: an explosion of small square "pixels" that launch
+// outward from the dispensed pill and fade. `p` is a MONOTONIC 0→1 progress
+// (state.burst), so the whole thing is a pure function of time — fully
+// scrubbable. Particle directions/speeds/colors come from an index hash
+// (NOT Math.random), so frames are deterministic and don't flicker.
+// Cool blue→purple palette (no red/yellow/orange) keeps it distinct from the
+// pills; small pixels keep it reading as confetti, not blobs.
+const BURST_COLORS = ['#6E8BE6', '#7E72E4', '#9270E2', '#A07BDC', '#5B7BE6', '#B488EC'];
+function drawFireworks(cx, cy, p) {
+  if (p <= 0.001 || p >= 1) return;
+  const N = 120, maxR = PILL_W * 3.1, gravity = PILL_H * 0.65;
+  const rand = (i, s) => { const x = Math.sin(i * 127.1 + s * 311.7) * 43758.5453; return x - Math.floor(x); };
+  const ease   = 1 - (1 - p) * (1 - p);              // easeOutQuad: fast launch, decelerate
+  const launch = Math.min(1, p / 0.06);              // quick fade-IN at the very start
+  const fade   = Math.pow(Math.max(0, 1 - p), 0.9);  // fade OUT as particles age (lingers brighter)
+  ctx.save();
+  for (let i = 0; i < N; i++) {
+    const ang  = i * 2.399963 + (rand(i, 1) - 0.5) * 0.7;   // golden-angle radial spray + jitter
+    const sp   = 0.5 + rand(i, 2) * 0.5;                    // varied reach
+    const dist = ease * maxR * sp;
+    const x = cx + Math.cos(ang) * dist;
+    const y = cy + Math.sin(ang) * dist + p * p * gravity;  // slight gravity arc
+    const size = (2.5 + rand(i, 4) * 3.0) * (1 - 0.4 * p);  // +25% pixels, shrink as they fade
+    ctx.globalAlpha = Math.min(1, 1.0 * launch * fade);
+    ctx.fillStyle = BURST_COLORS[Math.floor(rand(i, 3) * BURST_COLORS.length)];
+    ctx.fillRect(x - size / 2, y - size / 2, size, size);
+  }
+  ctx.restore();
+}
+
+function slotsFor(n) {
+  const cy = ARENA_CY;
+  if (n === 4) return [{ cx: ARENA_CX - 145, cy }, { cx: ARENA_CX - 70, cy },
+                       { cx: ARENA_CX + 70, cy }, { cx: ARENA_CX + 145, cy }];
+  if (n === 2) return [{ cx: ARENA_CX - 100, cy }, { cx: ARENA_CX + 100, cy }];
+  if (n === 1) return [{ cx: ARENA_CX, cy }];
+  const span = ARENA_W * 0.6, step = span / Math.max(1, n - 1), x0 = ARENA_CX - span / 2;
+  return Array.from({ length: n }, (_, i) => ({ cx: x0 + i * step, cy }));
+}
+
+// "Built-in door" occluder that slides in from the right. frac 0→1 = how far it
+// has crossed. Styled to MATCH the lottery itself — a cool frosted-glass panel
+// (same family as the arena window) with the machine's teal trim on its edge.
+function drawOccluder(c, frac) {
+  const w = ARENA_W * Math.min(1, frac), x0 = ARENA_X + ARENA_W - w;   // leading (left) edge
+  c.save();
+  roundRect(ARENA_X, ARENA_Y, ARENA_W, ARENA_H, 14); c.clip();
+  if (x0 > ARENA_X) {                                   // cool shadow cast to the left
+    const sh = c.createLinearGradient(x0 - 18, 0, x0, 0);
+    sh.addColorStop(0, 'rgba(28,80,95,0)'); sh.addColorStop(1, 'rgba(28,80,95,0.20)');
+    c.fillStyle = sh; c.fillRect(x0 - 18, ARENA_Y, 18, ARENA_H);
+  }
+  const body = c.createLinearGradient(0, ARENA_Y, 0, ARENA_Y + ARENA_H);   // cool frosted glass
+  body.addColorStop(0, '#eef7fa'); body.addColorStop(0.5, '#d9e9ef'); body.addColorStop(1, '#c4dbe3');
+  c.fillStyle = body; c.fillRect(x0, ARENA_Y, w + 2, ARENA_H);
+  const sheen = c.createLinearGradient(x0, ARENA_Y, x0 + Math.max(40, w), ARENA_Y + ARENA_H);  // glassy diagonal sheen
+  sheen.addColorStop(0, 'rgba(255,255,255,0.30)'); sheen.addColorStop(0.5, 'rgba(255,255,255,0)'); sheen.addColorStop(1, 'rgba(210,235,242,0.16)');
+  c.fillStyle = sheen; c.fillRect(x0, ARENA_Y, w + 2, ARENA_H);
+  c.strokeStyle = 'rgba(28,112,130,0.16)'; c.lineWidth = 1.5; c.lineCap = 'round';   // faint teal seams
+  for (let k = 1; k <= 3; k++) { const yy = ARENA_Y + ARENA_H * k / 4; c.beginPath(); c.moveTo(x0 + 14, yy); c.lineTo(ARENA_X + ARENA_W - 14, yy); c.stroke(); }
+  c.strokeStyle = 'rgba(255,255,255,0.45)';                                          // hairline highlight under each seam
+  for (let k = 1; k <= 3; k++) { const yy = ARENA_Y + ARENA_H * k / 4 + 1.3; c.beginPath(); c.moveTo(x0 + 14, yy); c.lineTo(ARENA_X + ARENA_W - 14, yy); c.stroke(); }
+  // Leading (left) edge: bevel → teal trim → bright lip.
+  const lead = c.createLinearGradient(x0 + 2.5, 0, x0 + 14, 0);                       // soft inner bevel
+  lead.addColorStop(0, 'rgba(28,112,130,0.28)'); lead.addColorStop(1, 'rgba(28,112,130,0)');
+  c.fillStyle = lead; c.fillRect(x0 + 2.5, ARENA_Y, 12, ARENA_H);
+  c.fillStyle = THEME.tubeWall; c.fillRect(x0, ARENA_Y, 2.5, ARENA_H);               // teal trim edge (matches the box)
+  c.fillStyle = 'rgba(245,252,254,0.70)'; c.fillRect(x0 + 2.5, ARENA_Y, 1.5, ARENA_H);  // bright lip
+  // Trailing (right) edge: mirror the same trim so the CLOSED door reads fully
+  // symmetric (the door is anchored at xR = ARENA_X + ARENA_W at every frac).
+  const xR = ARENA_X + ARENA_W;
+  const leadR = c.createLinearGradient(xR - 2.5, 0, xR - 14, 0);                      // mirrored inner bevel
+  leadR.addColorStop(0, 'rgba(28,112,130,0.28)'); leadR.addColorStop(1, 'rgba(28,112,130,0)');
+  c.fillStyle = leadR; c.fillRect(xR - 14.5, ARENA_Y, 12, ARENA_H);
+  c.fillStyle = THEME.tubeWall; c.fillRect(xR - 2.5, ARENA_Y, 2.5, ARENA_H);          // mirrored teal trim
+  c.fillStyle = 'rgba(245,252,254,0.70)'; c.fillRect(xR - 4, ARENA_Y, 1.5, ARENA_H);  // mirrored bright lip
+  c.restore();
+}
+
+const SCENE_BG = true;   // naturalistic sky+ground backdrop; set false to revert to plain white
+function drawScene(state) {
+  const s = state || {};
+  // Clear the ENTIRE backing store, not just the viewBox region — the firework
+  // rays extend below the viewBox, so a viewBox-only clear left ghost rays that
+  // never got wiped after the dispense.
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (SCENE_BG) {                                    // flat WALL fills the whole backing store
+    const wall = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    wall.addColorStop(0, '#ECE6DB'); wall.addColorStop(1, '#E2DACB');
+    ctx.fillStyle = wall; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  ctx.restore();                                     // back to scene (stage) coordinates
+  const COUNTER_Y = 650;                             // surface the machine stands on
+  const {
+    pills = [], arenaCover = 0, revealedPill = null, shakeX = 0, coverFraction = 1, coverAnchor = 'left',
+    pillsOpacity = 1, probs = null, fireworks = 0, burst = 0, coverRevealedPill = false,
+    yellowDx = 0, yellowDy = 0, yellowScaleX = 1, yellowScaleY = 1, yellowTilt = 0,
+    redDx = 0, redDy = 0, redScaleX = 1, redScaleY = 1, redTilt = 0, pillOffsets = null,
+    tubePillScaleX = 1, tubePillScaleY = 1, tubeShakeX = 0, occluderFrac = 0,
+  } = s;
+  const tubePillY = (typeof s.tubePillY === 'number') ? s.tubePillY : REVEAL_CY;
+  const tubeGapHX = tubeTopHalfW(s);  // tube half-width at TUBE_TOP; stretches with the pill
+
+  ctx.save(); ctx.translate(shakeX, 0);
+  // No outer cabinet / no tray — just the display window + chute on the counter.
+  // --- recessed lit window where the pills float ---
+  roundRect(ARENA_X, ARENA_Y, ARENA_W, ARENA_H, 14);
+  const win = ctx.createLinearGradient(0, ARENA_Y, 0, ARENA_Y + ARENA_H);
+  win.addColorStop(0, '#f8fbfc'); win.addColorStop(1, '#e7eff1');
+  ctx.fillStyle = win; ctx.fill();
+  // inner shadows = recessed depth
+  ctx.save(); roundRect(ARENA_X, ARENA_Y, ARENA_W, ARENA_H, 14); ctx.clip();
+  const ish = ctx.createLinearGradient(0, ARENA_Y, 0, ARENA_Y + 30);
+  ish.addColorStop(0, 'rgba(20,40,50,0.22)'); ish.addColorStop(1, 'rgba(20,40,50,0)');
+  ctx.fillStyle = ish; ctx.fillRect(ARENA_X, ARENA_Y, ARENA_W, 30);
+  const side = ctx.createLinearGradient(ARENA_X, 0, ARENA_X + ARENA_W, 0);
+  side.addColorStop(0, 'rgba(20,40,50,0.14)'); side.addColorStop(0.07, 'rgba(20,40,50,0)');
+  side.addColorStop(0.93, 'rgba(20,40,50,0)'); side.addColorStop(1, 'rgba(20,40,50,0.14)');
+  ctx.fillStyle = side; ctx.fillRect(ARENA_X, ARENA_Y, ARENA_W, ARENA_H);
+  ctx.restore();
+  roundRect(ARENA_X, ARENA_Y, ARENA_W, ARENA_H, 14); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.stroke();
+  // Arena edge: SAME color + thickness as the tube wall, but BREAK the bottom
+  // edge at the tube mouth so the border is never drawn on top of the tube.
+  {
+    const r = 14, X = ARENA_X, Y = ARENA_Y, W = ARENA_W, B = ARENA_Y + ARENA_H;
+    ctx.beginPath();
+    ctx.moveTo(X + r, Y);
+    ctx.lineTo(X + W - r, Y);          ctx.arcTo(X + W, Y, X + W, Y + r, r);   // top + TR corner
+    ctx.lineTo(X + W, B - r);          ctx.arcTo(X + W, B, X + W - r, B, r);   // right + BR corner
+    ctx.lineTo(ARENA_CX + tubeGapHX, B);                                       // bottom-right, stop at tube
+    ctx.moveTo(ARENA_CX - tubeGapHX, B);                                       // gap across the tube mouth
+    ctx.lineTo(X + r, B);              ctx.arcTo(X, B, X, B - r, r);           // bottom-left + BL corner
+    ctx.lineTo(X, Y + r);             ctx.arcTo(X, Y, X + r, Y, r);           // left + TL corner
+    ctx.strokeStyle = THEME.tubeWall; ctx.lineWidth = 2.5; ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.stroke();
+  }
+
+  const slots = slotsFor(pills.length);
+  if (pills.some(Boolean)) {
+    ctx.save();
+    ctx.beginPath(); ctx.roundRect(ARENA_X, ARENA_Y, ARENA_W, ARENA_H, 14); ctx.clip();
+    if (pillsOpacity < 1) ctx.globalAlpha = pillsOpacity;
+    pills.forEach((entry, i) => {
+      const slot = slots[i]; if (!slot || !entry) return;
+      let kind, rot;
+      if (typeof entry === 'string') { if (entry === 'silhouette') { kind = 'happy'; rot = 180; } else { kind = entry; rot = 0; } }
+      else { kind = entry.kind; rot = (typeof entry.rot === 'number') ? entry.rot : 0; }
+      let cx = slot.cx, cy = slot.cy, sx = 1, sy = 1;
+      // Dance is keyed to POSITION, not identity: the left pair always does the
+      // rock+jump, the right pair always does the tremble+shake. So the dance
+      // looks identical in every condition even when the colors are mirrored
+      // (e.g. contradicts), regardless of where yellow vs red sit.
+      if (i < 2) { cx += yellowDx; cy += yellowDy; sx = yellowScaleX; sy = yellowScaleY; }
+      else { cx += redDx; cy += redDy; sx = redScaleX; sy = redScaleY; }
+      if (pillOffsets && pillOffsets[i]) { cx += pillOffsets[i].dx || 0; cy += pillOffsets[i].dy || 0; }
+      // Per-pill scale pop (e.g. the deduction reveal bounce). Only set on revealed pills.
+      if (typeof entry === 'object' && typeof entry.sc === 'number') { sx *= entry.sc; sy *= entry.sc; }
+      drawPill(kind, cx, cy, sx, sy, rot, i < 2 ? yellowTilt : redTilt);
+    });
+    ctx.restore();
+  }
+  if (arenaCover > 0) {
+    const frac = Math.max(0, Math.min(1, coverFraction)), coverW = ARENA_W * frac;
+    const coverX = coverAnchor === 'right' ? ARENA_X + ARENA_W - coverW : ARENA_X;
+    if (coverW > 0) {
+      ctx.save(); ctx.globalAlpha = arenaCover;
+      roundRect(coverX, ARENA_Y, coverW, ARENA_H, 14);
+      ctx.fillStyle = THEME.occluderFill; ctx.fill();
+      ctx.lineWidth = THEME.occluderSW; ctx.strokeStyle = THEME.occluderStr; ctx.stroke();
+      ctx.strokeStyle = THEME.occluderStripe; ctx.lineWidth = 1.2;
+      for (let xx = coverX + 22; xx < coverX + coverW - 10; xx += 22) {
+        ctx.beginPath(); ctx.moveTo(xx, ARENA_Y + 14); ctx.lineTo(xx, ARENA_Y + ARENA_H - 14); ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+  // Occlusion-mode panel: a warm, soft "door" built into the right side of the
+  // box that slides across the whole window. Clipped to the arena → never spills
+  // outside, exactly arena height, opaque so it hides the bouncing pills.
+  if (occluderFrac > 0) drawOccluder(ctx, occluderFrac);
+  ctx.restore(); // shake
+
+  // (1) OPAQUE interior backing for the whole chute, drawn behind the pill. This
+  //     is the real fix: it carves the floor opening (covers the blue frame within
+  //     the tube) AND blocks everything that the translucent glass would otherwise
+  //     reveal behind it — the box's bottom rim, its drop shadow, the background.
+  const backing = '#e9f1f3';
+  if (revealedPill === 'silhouette') {
+    ctx.fillStyle = backing; ctx.fill(new Path2D(tubePathD(s)));
+  } else {
+    roundRect(TUBE_X, TUBE_TOP, TUBE_W, TUBE_H, 6); ctx.fillStyle = backing; ctx.fill();
+  }
+
+  // (2) The descending pill, over the opaque backing.
+  if (revealedPill === 'silhouette') {
+    ctx.save();
+    ctx.beginPath(); ctx.rect(ARENA_X - 60, TUBE_TOP, ARENA_W + 120, (TUBE_BOT + 240) - TUBE_TOP); ctx.clip();
+    drawSilhouette(REVEAL_CX + tubeShakeX, tubePillY, tubePillScaleX, tubePillScaleY);
+    ctx.restore();
+  }
+
+  // (3) Translucent glass front + OPEN-top walls (no cap line) so it reads
+  //     continuous with the box interior.
+  if (revealedPill === 'silhouette') {
+    ctx.fillStyle = THEME.tubeBody; ctx.fill(new Path2D(tubePathD(s)));
+    ctx.strokeStyle = THEME.tubeWall; ctx.lineWidth = 2.5; ctx.lineJoin = 'round';
+    ctx.stroke(new Path2D(tubePathD(s, false)));     // open top
+  } else {
+    roundRect(TUBE_X, TUBE_TOP, TUBE_W, TUBE_H, 6);
+    ctx.fillStyle = THEME.tubeBody; ctx.fill();
+    ctx.beginPath();                                  // side walls + bottom only (open top)
+    ctx.moveTo(TUBE_X, TUBE_TOP);
+    ctx.lineTo(TUBE_X, TUBE_BOT - 6);
+    ctx.quadraticCurveTo(TUBE_X, TUBE_BOT, TUBE_X + 6, TUBE_BOT);
+    ctx.lineTo(TUBE_X + TUBE_W - 6, TUBE_BOT);
+    ctx.quadraticCurveTo(TUBE_X + TUBE_W, TUBE_BOT, TUBE_X + TUBE_W, TUBE_BOT - 6);
+    ctx.lineTo(TUBE_X + TUBE_W, TUBE_TOP);
+    ctx.strokeStyle = THEME.tubeWall; ctx.lineWidth = 2.5; ctx.lineJoin = 'round'; ctx.stroke();
+  }
+
+  // (4) Designed floor SEAM that opens into the chute. A faint seam runs along the
+  //     box's inner floor and breaks at the mouth; the two break edges get a lit lip,
+  //     and a soft shadow drops just inside the mouth so it reads as opening downward.
+  ctx.save();
+  ctx.lineCap = 'round';
+  // seam line along the inner floor, interrupted at the mouth
+  ctx.strokeStyle = 'rgba(110,140,150,0.40)'; ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(ARENA_X + 18, TUBE_TOP); ctx.lineTo(ARENA_CX - tubeGapHX - 1, TUBE_TOP);
+  ctx.moveTo(ARENA_CX + tubeGapHX + 1, TUBE_TOP); ctx.lineTo(ARENA_X + ARENA_W - 18, TUBE_TOP);
+  ctx.stroke();
+  ctx.restore();
+  // depth shadow at the tube mouth: corner-cast from each wall inward rather
+  // than a flat wash, so the floor edges read as casting shadow into the opening.
+  ctx.save();
+  if (revealedPill === 'silhouette') ctx.clip(new Path2D(tubePathD(s)));
+  else { roundRect(TUBE_X, TUBE_TOP, TUBE_W, TUBE_H, 6); ctx.clip(); }
+  const shadL = ctx.createLinearGradient(ARENA_CX - tubeGapHX, 0, ARENA_CX - tubeGapHX + 20, 0);
+  shadL.addColorStop(0, 'rgba(20,50,62,0.38)'); shadL.addColorStop(1, 'rgba(20,50,62,0)');
+  ctx.fillStyle = shadL; ctx.fillRect(ARENA_CX - tubeGapHX, TUBE_TOP, 20, 14);
+  const shadR = ctx.createLinearGradient(ARENA_CX + tubeGapHX, 0, ARENA_CX + tubeGapHX - 20, 0);
+  shadR.addColorStop(0, 'rgba(20,50,62,0.38)'); shadR.addColorStop(1, 'rgba(20,50,62,0)');
+  ctx.fillStyle = shadR; ctx.fillRect(ARENA_CX + tubeGapHX - 20, TUBE_TOP, 20, 14);
+  // lit inner rim: bottom face of the floor opening catches light, reads as material thickness.
+  ctx.strokeStyle = 'rgba(255,255,255,0.42)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(ARENA_CX - tubeGapHX + 2, TUBE_TOP + 1); ctx.lineTo(ARENA_CX + tubeGapHX - 2, TUBE_TOP + 1);
+  ctx.stroke();
+  ctx.restore();
+
+  // (5) Ring/collar at the tube top — mirrors the SVG rim in lottery.js.
+  //     Drawn last in the tube stack so it caps the entrance and hides any
+  //     pill that pokes above TUBE_TOP while entering. Width tracks tubeGapHX
+  //     so it stretches with the tube body when the pill is near the top.
+  {
+    const rimHX = tubeGapHX + 4;
+    ctx.beginPath();
+    ctx.roundRect(ARENA_CX - rimHX, TUBE_TOP - 3, rimHX * 2, 10, 3);
+    ctx.fillStyle = THEME.tubeRim; ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = THEME.tubeRimStr; ctx.stroke();
+  }
+
+  if (burst > 0 && burst < 1) drawFireworks(REVEAL_CX, REVEAL_CY_OUT, burst);
+
+  if (revealedPill && revealedPill !== 'silhouette') {
+    // exitY/exitRot drive the snap-out + flip (modal only); thumbnails omit
+    // them and fall back to the dispensed-out position, face-forward.
+    const oy = (typeof s.exitY === 'number') ? s.exitY : REVEAL_CY_OUT;
+    const orot = (typeof s.exitRot === 'number') ? s.exitRot : 0;
+    if (coverRevealedPill) drawSilhouette(REVEAL_CX, oy);
+    else drawPill(revealedPill, REVEAL_CX, oy, 1, 1, orot);
+  }
+
+  if (probs && (probs.happy != null || probs.angry != null)) {
+    const pct = v => `${Math.round(v * 100)}%`;
+    const labelY = REVEAL_CY_OUT + 14;
+    ctx.textAlign = 'center'; ctx.font = '800 64px "Helvetica Neue", Helvetica, sans-serif';
+    ctx.fillStyle = THEME.happyFill; ctx.fillText(pct(probs.happy), ARENA_X + 110, labelY);
+    ctx.fillStyle = THEME.angryFill; ctx.fillText(pct(probs.angry), ARENA_X + ARENA_W - 110, labelY);
+  }
+}
+
+// ===================================================================
+// 5b) OCCLUSION ENGINE — parallel + additive. The Spinning engine above is
+// left untouched; the top-of-page mode toggle selects which one the modal
+// plays. The dances are identical; the diamond/orbit is replaced by a SEEDED
+// CONSTANT-SPEED bounce (looks random, fully deterministic + scrubbable):
+//   turn-in-place → brief pause → bounce ~5s → an occluder wall slides in from
+//   the right (machinery built into the box) → held ~5s (pills bounce hidden) →
+//   occluder retracts → pills keep moving briefly → stop → the clearest low pill
+//   glides to the tube mouth → slide-whistle drop → EXISTING reveal/dispense.
+// (Function/var names keep the "Random" prefix from the previous iteration.)
+// ===================================================================
+const TIMELINE_R = [
+  { name: 'introSettle', dur: 0.30 }, { name: 'yellowDance', dur: 1.90 },
+  { name: 'yellowJump',  dur: 1.00 }, { name: 'beat',        dur: 0.25 },
+  { name: 'redDance',    dur: 1.90 }, { name: 'redShake',    dur: 1.00 },
+  { name: 'dancesDone',  dur: 0.15 }, { name: 'premixPause', dur: 0.55 },
+  { name: 'rTurn',       dur: 1.275 }, // turn around in place
+  { name: 'rTurnPause',  dur: 0.60 },
+  { name: 'rFloat',      dur: 5.00 },  // constant-speed bounce, in view
+  { name: 'occIn',       dur: 0.60 },  // occluder slides closed
+  { name: 'occStop',     dur: 0.35 },  // behind the closed door: pills decelerate to a dead stop
+  { name: 'occHoldA',    dur: 1.80 },  // closed, pills static — a good way into the closure
+  { name: 'rGather',     dur: 0.90 },  // chosen pill moves to the tube mouth (HIDDEN behind the door)
+  { name: 'exit',        dur: 0.80 },  // slide-whistle drop INTO the tube begins (visible below the door)
+  { name: 'descent',     dur: 1.40 },  // continues to the tube bottom (exit+descent = slide-whistle length)
+  { name: 'occHoldB',    dur: 0.45 },  // pill rests at tube bottom, door still closed
+  { name: 'occOut',      dur: 0.60 },  // occluder opens → static pills + pill already in the tube
+  { name: 'dedSettle',   dur: 0.80 },  // brief settle, pills static
+  { name: 'reveal',      dur: 0.60 },
+  { name: 'revealHold',  dur: 2.50 },
+  { name: 'rehide',      dur: 0.60 },
+  { name: 'postReveal',  dur: 1.00 },
+  { name: 'preSpit',     dur: 2.50 },
+  { name: 'spit',        dur: 0.12 },
+  { name: 'dispense',    dur: 0.65 },
+  { name: 'endHold',     dur: 1.50 },
+];
+const PH_R = {};
+{ let acc = 0; for (const p of TIMELINE_R) { PH_R[p.name] = { t0: acc, t1: acc + p.dur, dur: p.dur }; acc += p.dur; } }
+const DURATION_R = TIMELINE_R.reduce((a, p) => a + p.dur, 0);
+const atR = (name, frac = 0) => PH_R[name].t0 + frac * PH_R[name].dur;
+
+// ---- Seeded deterministic bounce ----
+// Constant speed throughout (~33% faster than the previous iteration); no
+// speed-up phase. Slightly padded collisions so pills never overlap on the edges.
+const R_BASE_SPEED = 200, R_DT = 1 / 120;
+const R_COLL_PAD = 1.02, R_WALL_PAD = 2;     // ~1px breathing clearance (capsule contact is exact; no 8% fudge)
+const R_ROW = [-145, -70, 70, 145].map(d => ARENA_CX + d);   // dance-row slots (= slotsFor(4))
+// 16 vetted seeds (see _archive/render/vet_seeds.mjs): each intermixes well,
+// keeps the pills moving in DIVERGING directions (never drifting together), and
+// leaves the lowest resting pill a collision-free straight lane to the tube mouth.
+let R_SEEDS = [95, 1788, 2508, 1221, 1575, 1965, 1353, 1783, 2732, 1315, 138, 1836, 2109, 2147, 2346, 1382];
+function rMouthY() { const { RV } = pillExtents(); return TUBE_TOP - (RV + 4); }  // rest just above the floor
+function mulberry32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+// Speed envelope: full speed through the whole bounce (float + occluder + postOcc),
+// then ease to 0 across rStop. No mid-trial speed-up. Deterministic → scrubbable.
+function rRate(t) {
+  if (t < PH_R.occStop.t0) return 1;
+  if (t < PH_R.occStop.t1) return 1 - easeInOut(Math.min(1, (t - PH_R.occStop.t0) / PH_R.occStop.dur));
+  return 0;
+}
+// Precompute the whole bounce trajectory once per seed (pure fn of seed → scrubbable).
+function buildRandomSim(seed) {
+  const rnd = mulberry32(seed >>> 0);
+  // Launch in four well-separated directions (≈N/E/S/W → opposite pairs truly
+  // opposite) so no two pills set off travelling together.
+  const baseAng = rnd() * Math.PI * 2;
+  const spread = [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2];
+  const pills = R_ROW.map((x, i) => {
+    const ang = baseAng + spread[i] + (rnd() - 0.5) * 0.5;   // small jitter
+    return { x, y: ARENA_CY, vx: Math.cos(ang), vy: Math.sin(ang), speed: R_BASE_SPEED };
+  });
+  pills.forEach(normalizeSpeed);
+  const T0 = PH_R.rFloat.t0, T1 = PH_R.occStop.t1, frames = [];
+  const collisions = [];                            // pill-pill impact timestamps (visible bounce only)
+  const pairLastFired = {};                         // 'i-j' → last fire time for debounce
+  const COLL_DEBOUNCE = 0.25;                       // s — min gap before same pair fires again
+  const COLL_LEAD = 0.07;                           // s — fire this early to compensate audio latency
+  const COLL_T_END = PH_R.occIn.t1;                // only while pills are still in view
+  for (let t = T0; t <= T1 + 1e-9; t += R_DT) {
+    frames.push(pills.map(p => ({ x: p.x, y: p.y })));
+    const rate = rRate(t);
+    for (const p of pills) { p.speed = R_BASE_SPEED * rate; normalizeSpeed(p); }
+    stepPhysics(pills, R_DT, R_COLL_PAD, R_WALL_PAD);
+    if (t <= COLL_T_END) {
+      for (let i = 0; i < pills.length; i++) for (let j = i + 1; j < pills.length; j++) {
+        const c = capsuleContact(pills[i].x, pills[i].y, pills[j].x, pills[j].y);
+        if (c.D < 2 * c.RH * R_COLL_PAD) {
+          const key = i + '-' + j;
+          const last = pairLastFired[key] !== undefined ? pairLastFired[key] : -Infinity;
+          if (t - last >= COLL_DEBOUNCE) { collisions.push(t); pairLastFired[key] = t; }
+        }
+      }
+    }
+  }
+  return { T0, dt: R_DT, frames, frozen: frames[frames.length - 1].map(p => ({ x: p.x, y: p.y })), collisions };
+}
+function rSample(sim, t) {
+  const f = (t - sim.T0) / sim.dt, i = Math.max(0, Math.min(sim.frames.length - 1, Math.floor(f)));
+  const j = Math.min(sim.frames.length - 1, i + 1), u = Math.max(0, Math.min(1, f - i));
+  return sim.frames[i].map((p, k) => ({ x: lerp(p.x, sim.frames[j][k].x, u), y: lerp(p.y, sim.frames[j][k].y, u) }));
+}
+// Pick the exit pill (lowest with a clear straight lane to the mouth) and assign
+// identities so the chosen pill carries the dispensed kind and the two reveal
+// pills match the condition — invisible because every pill is a back here.
+function laneMargin(frozen, ci, RH, RV, mouthY) {
+  // Min normalized clearance of pill ci's straight glide to the mouth vs the others.
+  // nd >= 2 means edges just touch; we want a comfortable margin above that.
+  const sx = frozen[ci].x, sy = frozen[ci].y; let m = Infinity;
+  for (let k = 0; k < 4; k++) {
+    if (k === ci) continue;
+    for (let s = 0; s <= 24; s++) {
+      const u = s / 24, x = lerp(sx, ARENA_CX, u), y = lerp(sy, mouthY, u);
+      const nd = Math.hypot((frozen[k].x - x) / RH, (frozen[k].y - y) / RV);
+      if (nd < m) m = nd;
+    }
+  }
+  return m;
+}
+function chosenTravel(frozen, i, mouthY) { return Math.hypot(frozen[i].x - ARENA_CX, frozen[i].y - mouthY); }
+function pickChosenAndMap(sim, cfg) {
+  const frozen = sim.frozen, { RH, RV } = pillExtents(), mouthY = rMouthY();
+  const margins = [0, 1, 2, 3].map(i => laneMargin(frozen, i, RH, RV, mouthY));
+  const travel = i => chosenTravel(frozen, i, mouthY);
+  // The exit pill needs a CLEAR lane AND a small but real travel down to the tube
+  // — it must NOT already be sitting at the mouth. Prefer a comfortable mid-range
+  // distance so the glide reads as an actual descent.
+  const TARGET = 150;
+  let cands = [0, 1, 2, 3].filter(i => margins[i] >= 2.45 && travel(i) >= 80);
+  if (!cands.length) cands = [0, 1, 2, 3].filter(i => margins[i] >= 2.15 && travel(i) >= 60);
+  if (!cands.length) cands = [0, 1, 2, 3].filter(i => margins[i] >= 2.15);
+  if (!cands.length) cands = [0, 1, 2, 3];
+  cands.sort((a, b) => Math.abs(travel(a) - TARGET) - Math.abs(travel(b) - TARGET));
+  const chosen = cands[0];
+  const D = cfg.dispensed;
+  const revealKinds = cfg.revealSlots.map(s => (cfg.revealLayout || cfg.layout)[s]);
+  const bag = cfg.layout.slice();
+  const take = k => { const i = bag.indexOf(k); if (i >= 0) bag.splice(i, 1); };
+  take(D); revealKinds.forEach(take);
+  const leftover = bag[0];
+  const others = [0, 1, 2, 3].filter(i => i !== chosen);
+  const revealIdx = [others[0], others[1]], hiddenIdx = others[2];
+  const kinds = [];
+  kinds[chosen] = D; kinds[revealIdx[0]] = revealKinds[0]; kinds[revealIdx[1]] = revealKinds[1]; kinds[hiddenIdx] = leftover;
+  return { chosen, revealIdx, hiddenIdx, kinds, dispensed: D, cover: cfg.cover, mouthY };
+}
+
+// Per-play state: which seed, its trajectory, and the identity/exit map.
+let rState = { seed: null, sim: null, rmap: null, seedIdx: -1 };
+let rSeedCursor = 0, rPinnedSeed = null;
+// Seeding is "pinned" for now: every fresh play/replay uses one of these two
+// vetted draws (the seed-bar buttons labelled 7 & 8 → indices 6 & 7), chosen at
+// random so replays vary without reloading the page. The full 16-seed cursor and
+// the seed selector are left in the code (see SHOW_SEED_BAR) in case they return.
+const R_PREFERRED = [6, 7];
+function rPrepare(branchKey) {
+  const cfg = CFG[branchKey] || CFG.visual;
+  let seedIdx;
+  if (rPinnedSeed != null) seedIdx = ((rPinnedSeed % R_SEEDS.length) + R_SEEDS.length) % R_SEEDS.length;
+  else seedIdx = R_PREFERRED[Math.floor(Math.random() * R_PREFERRED.length)];   // random 7-or-8 each play
+  const seed = R_SEEDS[seedIdx];
+  const sim = buildRandomSim(seed);
+  rState = { seed, sim, rmap: pickChosenAndMap(sim, cfg), seedIdx };
+  return rState.rmap;
+}
+
+function buildKeyframesRandom(branchKey, rmap) {
+  const cfg = CFG[branchKey] || CFG.visual;
+  const c = rmap.chosen;
+  // VISIBLE-FACE keyframes (dances + the turn) always use the canonical starting
+  // layout — a pair of yellows + a pair of reds, position-matched to the dance —
+  // so the draw ALWAYS starts identically. The per-seed identity assignment
+  // (rmap.kinds) is applied only later, on the deduction reveal / dispense, when
+  // the pills are face-down backs and the swap is invisible (same trick the
+  // spinning engine uses with revealLayout).
+  const lay = cfg.layout;
+  const mk = (rot, kinds) => kinds.map(k => ({ kind: k, rot }));
+  const allFace = mk(0, lay), allBack = mk(180, lay), allTurn45 = mk(45, lay), allTurn90 = mk(90, lay), allTurn135 = mk(135, lay);
+  // Backs AFTER the secret swap carry the FINAL identities (rmap.kinds), so a pill
+  // that turns face-out at the reveal and then turns back keeps the SAME identity
+  // — it never changes when it re-turns or when the dispensed pill pops.
+  const allBackR = mk(180, rmap.kinds);
+  const sansExit = allBackR.map((p, i) => i === c ? null : p);
+  const isRev = i => rmap.revealIdx.includes(i);
+  const revealedArenaSansExit    = allBackR.map((p, i) => i === c ? null : (isRev(i) ? { ...p, rot: 0 } : p));
+  const revealedArenaPopSansExit = allBackR.map((p, i) => i === c ? null : (isRev(i) ? { ...p, rot: 0, sc: 1.18 } : p));
+  const zero = lay.map(() => ({ dx: 0, dy: 0 }));
+  const base = { pills: allFace, revealedPill: null, shakeX: 0, fireworks: 0, burst: 0,
+                 yellowDx: 0, yellowDy: 0, yellowScaleX: 1, yellowScaleY: 1,
+                 redDx: 0, redDy: 0, redScaleX: 1, redScaleY: 1, redTilt: 0, pillOffsets: zero };
+  const inTube = (extra = {}) => ({ ...base, pills: sansExit, revealedPill: 'silhouette',
+    tubePillY: REVEAL_CY, tubePillScaleX: 1, tubePillScaleY: 1, tubeBulge: 0, tubeTaper: 58, ...extra });
+  const orient = cfg.cover ? 180 : 0;
+  const endPill = { revealedPill: cfg.cover ? 'silhouette' : rmap.dispensed };
+  const START = TUBE_TOP + PILL_H * 0.35, REST = REVEAL_CY;
+  const T0 = atR('descent', 0), TS = atR('descent', 1), TH = atR('occHoldB', 1);
+  const segAt = u => T0 + u * (TS - T0);
+  const flowY = tt => START + (REST - START) * Math.min(1, Math.max(0, (tt - T0) / (TS - T0)));
+  const flow = (tt, extra = {}) => ({ t: tt, state: inTube({ tubePillY: flowY(tt), tubeBulge: 3, tubeTaper: 54, ...extra }) });
+  function pop(y, rot, burst = 0, extra) {
+    return { ...base, pills: sansExit, revealedPill: rmap.dispensed,
+      exitY: y, exitRot: rot, tubePillY: REVEAL_CY_OUT,
+      tubePillScaleX: 1, tubePillScaleY: 1, tubeBulge: 0, tubeTaper: 56, fireworks: 0, burst, ...extra };
+  }
+  const kf = [
+    { t: atR('introSettle', 0), state: { ...base } },
+    { t: atR('introSettle', 1), state: { ...base } },
+    { t: atR('yellowDance', 0.00), state: { ...base } },
+    { t: atR('yellowDance', 0.12), state: { ...base, yellowDx: 9,  yellowTilt: 12,  yellowScaleX: 1.05, yellowScaleY: 0.95 } },
+    { t: atR('yellowDance', 0.26), state: { ...base, yellowDx: -9, yellowTilt: -12, yellowScaleX: 1.05, yellowScaleY: 0.95 } },
+    { t: atR('yellowDance', 0.40), state: { ...base, yellowDx: 9,  yellowTilt: 12 } },
+    { t: atR('yellowDance', 0.54), state: { ...base, yellowDx: -9, yellowTilt: -12 } },
+    { t: atR('yellowDance', 0.68), state: { ...base, yellowDx: 9,  yellowTilt: 12 } },
+    { t: atR('yellowDance', 0.82), state: { ...base, yellowDx: -9, yellowTilt: -12 } },
+    { t: atR('yellowDance', 0.92), state: { ...base, yellowDx: 0,  yellowTilt: 0 } },
+    { t: atR('yellowDance', 1.00), state: { ...base } },
+    { t: atR('yellowJump', 0.12), state: { ...base, yellowScaleX: 1.12, yellowScaleY: 0.85, yellowDy: 8 } },
+    { t: atR('yellowJump', 0.42), state: { ...base, yellowScaleX: 0.88, yellowScaleY: 1.16, yellowDy: -70 } },
+    { t: atR('yellowJump', 0.72), state: { ...base, yellowScaleX: 1.12, yellowScaleY: 0.85, yellowDy: 6 } },
+    { t: atR('yellowJump', 1.00), state: { ...base } },
+    { t: atR('beat', 1.00), state: { ...base } },
+    { t: atR('redDance', 0.00), state: { ...base } },
+    { t: atR('redDance', 0.05), state: { ...base, redDx: 5,  redTilt: 3,  redScaleX: 1.06, redScaleY: 0.94 } },
+    { t: atR('redDance', 0.11), state: { ...base, redDx: -5, redTilt: -3, redScaleX: 1.06, redScaleY: 0.94 } },
+    { t: atR('redDance', 0.17), state: { ...base, redDx: 5,  redTilt: 3,  redScaleX: 1.06, redScaleY: 0.94 } },
+    { t: atR('redDance', 0.23), state: { ...base, redDx: -5, redTilt: -3, redScaleX: 1.06, redScaleY: 0.94 } },
+    { t: atR('redDance', 0.29), state: { ...base, redDx: 5,  redTilt: 3,  redScaleX: 1.06, redScaleY: 0.94 } },
+    { t: atR('redDance', 0.35), state: { ...base, redDx: -5, redTilt: -3, redScaleX: 1.06, redScaleY: 0.94 } },
+    { t: atR('redDance', 0.41), state: { ...base, redDx: 5,  redTilt: 3,  redScaleX: 1.06, redScaleY: 0.94 } },
+    { t: atR('redDance', 0.47), state: { ...base, redDx: -5, redTilt: -3, redScaleX: 1.06, redScaleY: 0.94 } },
+    { t: atR('redDance', 0.53), state: { ...base, redDx: 5,  redTilt: 3,  redScaleX: 1.06, redScaleY: 0.94 } },
+    { t: atR('redDance', 0.59), state: { ...base, redDx: -5, redTilt: -3, redScaleX: 1.06, redScaleY: 0.94 } },
+    { t: atR('redDance', 0.65), state: { ...base, redDx: 5,  redTilt: 3,  redScaleX: 1.06, redScaleY: 0.94 } },
+    { t: atR('redDance', 0.71), state: { ...base, redDx: -5, redTilt: -3, redScaleX: 1.06, redScaleY: 0.94 } },
+    { t: atR('redDance', 0.77), state: { ...base, redDx: 5,  redTilt: 3,  redScaleX: 1.06, redScaleY: 0.94 } },
+    { t: atR('redDance', 0.83), state: { ...base, redDx: -5, redTilt: -3, redScaleX: 1.06, redScaleY: 0.94 } },
+    { t: atR('redDance', 0.89), state: { ...base, redDx: 4,  redTilt: 2,  redScaleX: 1.05, redScaleY: 0.95 } },
+    { t: atR('redDance', 0.95), state: { ...base, redDx: 0,  redTilt: 0 } },
+    { t: atR('redDance', 1.00), state: { ...base } },
+    { t: atR('redShake', 0.12), state: { ...base, redTilt: 18 } },
+    { t: atR('redShake', 0.28), state: { ...base, redTilt: -18 } },
+    { t: atR('redShake', 0.44), state: { ...base, redTilt: 15 } },
+    { t: atR('redShake', 0.60), state: { ...base, redTilt: -15 } },
+    { t: atR('redShake', 0.76), state: { ...base, redTilt: 10 } },
+    { t: atR('redShake', 1.00), state: { ...base, redTilt: 0 } },
+    { t: atR('dancesDone', 1.00), state: { ...base } },
+    { t: atR('premixPause', 1.00), state: { ...base } },
+    // --- turn around IN PLACE at the row (stepped angles so the roll reads) ---
+    { t: atR('rTurn', 0.12), state: { ...base } },
+    { t: atR('rTurn', 0.34), state: { ...base, pills: allTurn45 } },
+    { t: atR('rTurn', 0.56), state: { ...base, pills: allTurn90 } },
+    { t: atR('rTurn', 0.78), state: { ...base, pills: allTurn135 } },
+    { t: atR('rTurn', 1.00), state: { ...base, pills: allBack } },
+    // backs from here on (positions come from computeStateRandom's sim/gather)
+    { t: atR('rTurnPause', 1.00), state: { ...base, pills: allBack } },
+    { t: atR('rFloat',     1.00), state: { ...base, pills: allBack } },
+    { t: atR('occStop',    1.00), state: { ...base, pills: allBack } },
+    { t: atR('occHoldA',   1.00), state: { ...base, pills: allBack } },
+    { t: atR('rGather',    1.00), state: { ...base, pills: allBack } },
+    { t: atR('exit', 1.00), state: { ...base, pills: allBack } },
+    flow(segAt(0.0)), flow(segAt(0.5)), flow(TS), flow(TH),
+    { t: atR('dedSettle',  1.00), state: inTube({ pills: sansExit }) },
+    { t: atR('reveal',     1.00), state: inTube({ pills: revealedArenaSansExit }) },
+    { t: atR('revealHold', 0.26), state: inTube({ pills: revealedArenaSansExit }) },
+    { t: atR('revealHold', 0.32), state: inTube({ pills: revealedArenaPopSansExit }) },
+    { t: atR('revealHold', 0.39), state: inTube({ pills: revealedArenaSansExit }) },
+    { t: atR('revealHold', 0.44), state: inTube({ pills: revealedArenaPopSansExit }) },
+    { t: atR('revealHold', 0.51), state: inTube({ pills: revealedArenaSansExit }) },
+    { t: atR('revealHold', 0.56), state: inTube({ pills: revealedArenaPopSansExit }) },
+    { t: atR('revealHold', 0.63), state: inTube({ pills: revealedArenaSansExit }) },
+    { t: atR('revealHold', 1.00), state: inTube({ pills: revealedArenaSansExit }) },
+    { t: atR('rehide',     1.00), state: inTube({ pills: sansExit }) },
+    flow(atR('preSpit', 1.00), { fireworks: 0 }),
+    { t: atR('spit', 0.10), state: pop(REVEAL_CY_OUT, orient, 0.12) },
+    { t: atR('dispense', 0.50), state: pop(REVEAL_CY_OUT, orient, 0.55) },
+    { t: atR('dispense', 1.00), state: pop(REVEAL_CY_OUT, orient, 0.82, endPill) },
+    { t: atR('endHold',  1.00), state: pop(REVEAL_CY_OUT, orient, 1, endPill) },
+  ];
+  return kf.filter(k => k && k.t !== undefined);
+}
+
+function computeStateRandom(kf, _exit, t) {
+  let state = stateAtTime(kf, t);
+  if (t < PH_R.rFloat.t0) return state;           // dances + turn-in-place are pure keyframes
+  const sim = rState.sim, rmap = rState.rmap;
+  if (!sim || !rmap) return state;
+  const CX = ARENA_CX, CY = ARENA_CY, mouthY = rmap.mouthY, c = rmap.chosen, slot = R_ROW;
+  const frozen = sim.frozen;
+  const sinkY = tt => { const u = Math.min(1, Math.max(0, (tt - PH_R.exit.t0) / (PH_R.descent.t1 - PH_R.exit.t0))); return mouthY + (REVEAL_CY - mouthY) * u * u; };
+
+  let pos;
+  if (t < PH_R.occStop.t1) pos = rSample(sim, t);                     // bouncing (incl. deceleration)
+  else pos = frozen.map(p => ({ x: p.x, y: p.y }));                   // stopped
+  if (t >= PH_R.rGather.t0 && t < PH_R.exit.t0) {                     // chosen glides to the mouth
+    const u = easeInOut(Math.min(1, (t - PH_R.rGather.t0) / PH_R.rGather.dur));
+    pos = frozen.map((p, i) => i === c ? { x: lerp(frozen[c].x, CX, u), y: lerp(frozen[c].y, mouthY, u) } : { x: p.x, y: p.y });
+  } else if (t >= PH_R.exit.t0) {                                     // chosen drops into the tube
+    pos = frozen.map((p, i) => i === c ? { x: CX, y: sinkY(t) } : { x: p.x, y: p.y });
+  }
+  state = { ...state, pillOffsets: [0, 1, 2, 3].map(i => ({ dx: pos[i].x - slot[i], dy: pos[i].y - CY })) };
+
+  // Occluder wall: slides in from the right (occIn), stays closed over the whole
+  // arena (occHold), retracts (occOut). occluderFrac 0→1→0 drives drawScene; the
+  // pills keep bouncing underneath the opaque panel the entire time.
+  if (t >= PH_R.occIn.t0 && t < PH_R.occOut.t1) {
+    let frac;
+    if (t < PH_R.occIn.t1) frac = easeInOut((t - PH_R.occIn.t0) / PH_R.occIn.dur);
+    else if (t < PH_R.occOut.t0) frac = 1;
+    else frac = 1 - easeInOut((t - PH_R.occOut.t0) / PH_R.occOut.dur);
+    state = { ...state, occluderFrac: frac };
+  }
+
+  // Continuous arena→tube handoff for the chosen pill (mirrors the spinning engine).
+  if (t >= PH_R.exit.t0 && t < PH_R.spit.t0) {
+    const y = sinkY(t);
+    if (y >= TUBE_TOP - PILL_DRAW_H * 0.5) {
+      state = { ...state, revealedPill: 'silhouette', tubePillY: y, tubeBulge: 3, tubeTaper: PILL_DRAW_H / 2 };
+    } else if (state.revealedPill === 'silhouette') {
+      state = { ...state, revealedPill: null };
+    }
+    if (y - PILL_DRAW_H / 2 < TUBE_TOP && state.pills && !state.pills[c]) {
+      const pills2 = state.pills.slice(); pills2[c] = { kind: rmap.kinds[c], rot: 180 };
+      const offs2 = state.pillOffsets.slice(); offs2[c] = { dx: CX - slot[c], dy: y - CY };
+      state = { ...state, pills: pills2, pillOffsets: offs2 };
+    }
+  }
+  // Suspense buzz before the spit (identical to the spinning engine).
+  const vibStart = PH_R.preSpit.t0, vibEnd = PH_R.spit.t0;
+  if (state.revealedPill === 'silhouette' && t >= vibStart && t < vibEnd) {
+    const tau = t - vibStart, dur = vibEnd - vibStart, u = tau / dur;
+    const env = 0.25 + 0.75 * Math.pow(u, 1.6), f0 = 6, f1 = 13;
+    const phase = 2 * Math.PI * (f0 * tau + 0.5 * (f1 - f0) / dur * tau * tau);
+    state = { ...state, tubeShakeX: ANIM.suspense.amp * env * Math.sin(phase) };
+  }
+  return state;
+}
+
+// ---- Mode selection (Spinning vs Random) ----
+let lotteryMode = 'spin';
+const modeDuration = () => lotteryMode === 'occlusion' ? DURATION_R : DURATION;
+function syncModeButtons() {
+  const tog = document.getElementById('mode-toggle'); if (!tog) return;
+  tog.querySelectorAll('button[data-mode]').forEach(b => b.classList.toggle('active', b.dataset.mode === lotteryMode));
+}
+function setLotteryMode(m, pinnedSeed) {
+  lotteryMode = (m === 'occlusion' || m === 'random') ? 'occlusion' : 'spin';
+  rPinnedSeed = (typeof pinnedSeed === 'number' && !isNaN(pinnedSeed)) ? pinnedSeed : null;
+  syncModeButtons();
+}
+window.setLotteryMode = setLotteryMode;
+
+// ---- Seed selector (occlusion mode): audition every vetted draw ----
+// Hidden for now (seeding is pinned to 7/8). Flip SHOW_SEED_BAR to true to bring
+// the bottom selector back — all of its functionality below is left intact.
+const SHOW_SEED_BAR = false;
+function buildSeedBar() {
+  if (!SHOW_SEED_BAR) return;
+  const bar = document.getElementById('seed-bar'); if (!bar || bar.childElementCount) return;
+  const auto = document.createElement('button');
+  auto.type = 'button'; auto.className = 'seed-auto'; auto.dataset.seed = 'auto';
+  auto.textContent = '↻'; auto.title = 'Cycle seeds (new each replay)';
+  bar.appendChild(auto);
+  R_SEEDS.forEach((s, i) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.dataset.seed = String(i); b.textContent = String(i + 1);
+    b.title = `Seed ${i + 1} (#${s})`;
+    bar.appendChild(b);
+  });
+  bar.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-seed]'); if (!b) return;
+    rPinnedSeed = (b.dataset.seed === 'auto') ? null : parseInt(b.dataset.seed, 10);
+    // Jump straight to the flip-around so you immediately see THIS seed's draw,
+    // skipping the (identical) dances.
+    playAnimation(currentBranch, PH_R.rTurn.t0);
+  });
+}
+function syncSeedBar() {
+  const bar = document.getElementById('seed-bar'); if (!bar) return;
+  const on = SHOW_SEED_BAR && lotteryMode === 'occlusion';
+  bar.classList.toggle('show', on);
+  bar.querySelectorAll('button[data-seed]').forEach(b => {
+    const isAuto = b.dataset.seed === 'auto';
+    const active = on && (isAuto ? rPinnedSeed == null
+                                 : (rPinnedSeed != null && parseInt(b.dataset.seed, 10) === rState.seedIdx));
+    b.classList.toggle('active', active);
+  });
+}
+// Seed-vetting hook (used offline by _archive/render/vet_seeds.mjs). Returns the
+// geometry-only metrics for a seed: chosen pill, its lane clearance, how much
+// each pill intermixed, and the spread of the final resting field.
+window.__rvet = (seed) => {
+  const sim = buildRandomSim(seed >>> 0);
+  const { RH, RV } = pillExtents(), mouthY = rMouthY(), frozen = sim.frozen;
+  const margins = [0, 1, 2, 3].map(i => laneMargin(frozen, i, RH, RV, mouthY));
+  const rmap = pickChosenAndMap(sim, CFG.visual);
+  // path length per pill across the whole bounce (intermix proxy)
+  const path = [0, 0, 0, 0];
+  for (let f = 1; f < sim.frames.length; f++) for (let i = 0; i < 4; i++)
+    path[i] += Math.hypot(sim.frames[f][i].x - sim.frames[f - 1][i].x, sim.frames[f][i].y - sim.frames[f - 1][i].y);
+  // min pairwise gap of the resting field (normalized; >2 = no overlap)
+  let minGap = Infinity;
+  for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++)
+    minGap = Math.min(minGap, Math.hypot((frozen[i].x - frozen[j].x) / RH, (frozen[i].y - frozen[j].y) / RV));
+  // edge margin: smallest px distance of any resting pill from the arena walls —
+  // we want a nicely-distributed group that isn't crammed against an edge.
+  const { minX, maxX, minY, maxY } = arenaBounds(0);
+  let edgeMargin = Infinity;
+  for (let i = 0; i < 4; i++) {
+    const f = frozen[i];
+    edgeMargin = Math.min(edgeMargin, f.x - minX, maxX - f.x, f.y - minY, maxY - f.y);
+  }
+  // "clump": fraction of frames where any pair is BOTH close AND moving in nearly
+  // the same direction (drifting together) — we want seeds that minimize this.
+  let clump = 0, counted = 0;
+  for (let f = 1; f < sim.frames.length; f++) {
+    counted++;
+    const vel = sim.frames[f].map((p, i) => ({ vx: p.x - sim.frames[f - 1][i].x, vy: p.y - sim.frames[f - 1][i].y }));
+    let bad = false;
+    for (let i = 0; i < 4 && !bad; i++) for (let j = i + 1; j < 4; j++) {
+      const d = Math.hypot((sim.frames[f][i].x - sim.frames[f][j].x) / RH, (sim.frames[f][i].y - sim.frames[f][j].y) / RV);
+      const a = vel[i], b = vel[j], ma = Math.hypot(a.vx, a.vy), mb = Math.hypot(b.vx, b.vy);
+      if (ma < 1e-6 || mb < 1e-6) continue;
+      const cos = (a.vx * b.vx + a.vy * b.vy) / (ma * mb);
+      if (d < 3.4 && cos > 0.82) { bad = true; break; }   // close + within ~35° → drifting together
+    }
+    if (bad) clump++;
+  }
+  return { seed, chosen: rmap.chosen, chosenMargin: margins[rmap.chosen], minPath: Math.min(...path), minGap, edgeMargin, chosenY: frozen[rmap.chosen].y, clumpFrac: clump / Math.max(1, counted), chosenTravel: chosenTravel(frozen, rmap.chosen, mouthY) };
+};
+
+// ===================================================================
+// 6) PLAYBACK
+// ===================================================================
+let animFrame = null, playing = false, startTime = 0;
+let curKf = buildKeyframes('visual'), curExit = CFG.visual.exitSlot, currentBranch = 'visual';
+const FPS = 60, TOTAL_FRAMES = Math.round(DURATION * FPS);
+
+function computeState(kf, EXIT_SLOT, t) {
+  let state = stateAtTime(kf, t);
+  if (t < PH.flySquare.t0) return state;
+
+  const CX = ARENA_CX, CY = ARENA_CY, R = ANIM.orbit.radius, D2R = Math.PI / 180;
+  const posAt = deg => ({ x: CX + R * Math.cos(deg * D2R), y: CY + R * Math.sin(deg * D2R) });
+  const slotX = [-145, -70, 70, 145].map(d => CX + d);
+  // Diamond, point-symmetric: outer pills → sides (L/R), inner pills → top/bottom.
+  // Opposite pills sit truly opposite (180/0, 270/90) so the spin keeps it balanced.
+  // slots: [outer-L, inner-L, inner-R, outer-R]
+  const base = [180, 270, 90, 0];
+  const totalSpin = ANIM.orbit.turns * 360 + (((90 - base[EXIT_SLOT]) % 360) + 360) % 360;
+  const finalDeg = i => base[i] + totalSpin;
+  const sinkY = tt => {
+    const y0 = CY + R, REST = REVEAL_CY;
+    const u = Math.min(1, Math.max(0, (tt - PH.exit.t0) / (PH.descent.t1 - PH.exit.t0)));
+    return y0 + (REST - y0) * u * u;
+  };
+  // Fly into the diamond (no rotation during the fly, so paths don't cross), HOLD
+  // there through the 'turn' phase while the pills do the original turnaround flip,
+  // then orbit. base is the diamond (inner→top/bottom, outer→sides).
+  const posOf = i => {
+    if (t < PH.flySquare.t1) {
+      const u = easeInOut((t - PH.flySquare.t0) / PH.flySquare.dur);
+      const c = posAt(base[i]);
+      return { x: lerp(slotX[i], c.x, u), y: lerp(CY, c.y, u) };
+    }
+    if (i === EXIT_SLOT && t >= PH.exit.t0) return { x: CX, y: sinkY(t) };
+    if (t < PH.orbit.t0) return posAt(base[i]);                          // hold while it flips
+    if (t < PH.orbit.t1) return posAt(base[i] + totalSpin * easeInOut((t - PH.orbit.t0) / PH.orbit.dur));
+    return posAt(finalDeg(i));
+  };
+  state = { ...state, pillOffsets: [0, 1, 2, 3].map(i => { const p = posOf(i); return { dx: p.x - slotX[i], dy: p.y - CY }; }) };
+
+  if (t >= PH.exit.t0 && t < PH.spit.t0) {
+    const y = sinkY(t);
+    if (y >= TUBE_TOP - PILL_DRAW_H * 0.5) {
+      // Pill has reached the tube mouth: it IS the in-tube silhouette. Force
+      // its tube position to the sink position so the arena (straddle) half
+      // and the tube half read as one continuous pill.
+      state = { ...state, revealedPill: 'silhouette', tubePillY: y, tubeBulge: 3, tubeTaper: PILL_DRAW_H / 2 };
+    } else if (state.revealedPill === 'silhouette') {
+      // Pill is still fully in the arena. The descent keyframes would otherwise
+      // start drawing an in-tube silhouette (at flowY) before the sinking pill
+      // has actually entered — suppress it so there's never a SECOND pill in
+      // the tube during the hand-off.
+      state = { ...state, revealedPill: null };
+    }
+    if (y - PILL_DRAW_H / 2 < TUBE_TOP && state.pills && !state.pills[EXIT_SLOT]) {
+      const pills2 = state.pills.slice(); pills2[EXIT_SLOT] = { kind: STARTING[EXIT_SLOT], rot: 180 };
+      const offs2 = state.pillOffsets.slice(); offs2[EXIT_SLOT] = { dx: CX - slotX[EXIT_SLOT], dy: y - CY };
+      state = { ...state, pills: pills2, pillOffsets: offs2 };
+    }
+  }
+
+  // Suspense buzz: the pill rests silently in the tube through the deduction reveal;
+  // only AFTER the reveal finishes (a split second into postReveal→preSpit) does it
+  // begin to buzz, building — in amplitude AND frequency — all the way to the spit.
+  // Deterministic chirp → fully scrubbable.
+  const vibStart = PH.preSpit.t0;  // begins only after the deduction reveal (reveal→hold→rehide) finishes
+  const vibEnd = PH.spit.t0;       // the pop
+  if (state.revealedPill === 'silhouette' && t >= vibStart && t < vibEnd) {
+    const tau = t - vibStart, dur = vibEnd - vibStart, u = tau / dur;  // 0→1 across the build
+    const env = 0.25 + 0.75 * Math.pow(u, 1.6);             // perceptible from the start, grows
+    const f0 = 6, f1 = 13;                                  // Hz: calm → tense (not frantic)
+    const phase = 2 * Math.PI * (f0 * tau + 0.5 * (f1 - f0) / dur * tau * tau);
+    state = { ...state, tubeShakeX: ANIM.suspense.amp * env * Math.sin(phase) };
+  }
+  return state;
+}
+
+const scrub = document.getElementById('scrub');
+const playPauseBtn = document.getElementById('modal-playpause');
+function syncPlayBtn() { if (playPauseBtn) playPauseBtn.innerHTML = playing ? '&#x23f8;' : '&#x25b6;'; }
+scrub.max = DURATION; scrub.step = 1 / FPS;
+
+let curT = 0;
+function renderFrame(t) {
+  t = curT = Math.max(0, Math.min(modeDuration(), t));
+  drawScene((lotteryMode === 'occlusion' ? computeStateRandom : computeState)(curKf, curExit, t));
+  scrub.value = t;
+}
+
+function playAnimation(branchKey, startAt = 0) {
+  const cfg = CFG[branchKey] || CFG.visual;
+  if (lotteryMode === 'occlusion') {
+    const rmap = rPrepare(branchKey);
+    curKf = buildKeyframesRandom(branchKey, rmap); curExit = rmap.chosen;
+    ensureCollBuffer();
+  } else {
+    curKf = buildKeyframes(branchKey); curExit = cfg.exitSlot;
+  }
+  currentBranch = branchKey;
+  scrub.max = modeDuration();
+  syncSeedBar();                                     // show/refresh the seed selector
+  const modeLabel = lotteryMode === 'occlusion' ? 'Occlusion' : 'Spinning Lottery';
+  document.getElementById('modal-title').textContent = `${TITLES[branchKey] || 'Animation'} · ${modeLabel}`;
+  document.getElementById('modal-card').style.setProperty('--c', COLORS[branchKey] || '#5a4f44');
+  document.getElementById('modal-backdrop').classList.add('open');
+  document.documentElement.classList.add('modal-open');
+  document.body.classList.add('modal-open');
+  fitCanvas();
+  stopAllSounds();                                   // clear any stale seek-sync WA nodes
+  curT = Math.max(0, Math.min(modeDuration() - 0.01, startAt));
+  audioPrevT = curT;                                 // don't replay cues before the jump-in point
+  setPlaying(true);
+}
+// Resume/pause from the CURRENT scrub position (curT) — play doesn't restart.
+function setPlaying(on) {
+  if (on) {
+    if (curT >= modeDuration() - 1e-3) curT = 0;    // at the end → restart
+    startTime = performance.now() - curT * 1000;    // anchor the clock to curT
+    playing = true;
+    audioPrevT = curT;                              // anchor sound clock to play start
+    if (animFrame) cancelAnimationFrame(animFrame);
+    animFrame = requestAnimationFrame(tick);
+  } else {
+    playing = false;
+    stopAllSounds();
+    if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
+  }
+  syncPlayBtn();
+}
+function togglePlay() { setPlaying(!playing); }
+function tick(now) {
+  const t = (now - startTime) / 1000;
+  scanSounds(audioPrevT, t);
+  if (soundOn && lotteryMode === 'occlusion' && rState.sim) {
+    for (const ct of rState.sim.collisions) {
+      if (ct > audioPrevT && ct <= t) playCollisionWA();
+    }
+  }
+  audioPrevT = t;                                   // fire any beat-start cues crossed this frame
+  renderFrame(t);
+  if (playing && t < modeDuration()) animFrame = requestAnimationFrame(tick);
+  else { animFrame = null; playing = false; stopLoop(); syncPlayBtn(); }
+}
+function closeAnimation() {
+  if (animFrame) cancelAnimationFrame(animFrame);
+  animFrame = null; playing = false; stopAllSounds();
+  document.getElementById('modal-backdrop').classList.remove('open');
+  document.documentElement.classList.remove('modal-open');
+  document.body.classList.remove('modal-open');
+}
+window.playAnimation = playAnimation;
+window.closeAnimation = closeAnimation;
+
+// Capture play state before drag so we can restore it on release.
+let wasScrubPlaying = false;
+scrub.addEventListener('pointerdown', () => { wasScrubPlaying = playing; });
+scrub.addEventListener('input', () => {
+  if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
+  playing = false; syncPlayBtn();
+  stopAllSounds();                         // silent while dragging
+  renderFrame(parseFloat(scrub.value));   // updates curT
+  audioPrevT = curT;                       // anchor so forward scanSounds doesn't backfire
+  scrub.blur();                            // prevent space from routing to the range input
+});
+// On release: restore play state. No audio catch-up — scanSounds in tick() will
+// fire only cues that start AFTER curT, so no retroactive sounds.
+scrub.addEventListener('change', () => {
+  audioPrevT = curT;
+  if (wasScrubPlaying) setPlaying(true);
+});
+
+// ===================================================================
+// 6b) SOUND ENGINE — beat-triggered CC0 audio + audition panel.
+//     CC0 clips live in _shared/sounds/ (see CREDITS.md). This block runs
+//     ONLY inside the live tick() loop, never inside lottery.js/drawScene,
+//     so the headless _render harness stays silent.
+// ===================================================================
+const SOUND_DIR = '_shared/sounds/';
+// Candidate clips per cue (filenames sans .ogg). Audition in the 🔊 panel;
+// the picked clip per cue is stored in SOUND_MAP (+ localStorage).
+// Filenames WITH extension play as-is; bare names get '.ogg' appended (getAudio).
+const SOUND_CANDIDATES = {
+  happySeq: ['seq_happy.mp3'],
+  angrySeq: ['seq_angry.mp3'],
+  orbit: ['whoosh_orbit_flat.mp3'],
+  tubeSlide: ['tube_slide.mp3'],
+  pop:     ['pop__light0', 'pop__light1'],
+  ding:    ['ding.mp3'],
+  flip:    ['flip.mp3'],
+  vibrate: ['vibrate.mp3'],
+  revealChime: ['reveal_combo.mp3'],
+  collision: ['pill_collision.mp3'],
+};
+// Which TIMELINE beat fires each cue, and how. 'loop' plays across [t0,t1].
+// The dance sequences are pre-mixed (music + vocal), fired once at the dance start;
+// the vocal sits at 1.9s in each clip, landing on the jump / head-shake beat.
+const SOUND_CUES = [
+  { cue: 'happySeq', beat: 'yellowDance', type: 'oneshot', desc: 'Happy dance music + "yay"' },
+  { cue: 'angrySeq', beat: 'redDance',    type: 'oneshot', desc: 'Angry dance music + male voice' },
+  { cue: 'orbit',    beat: 'orbit',       type: 'oneshot', desc: 'Orbit whoosh — fires as the pills start circling, runs only through the orbit' },
+  { cue: 'flip',     beat: 'turn',   offset: 0.2, type: 'oneshot', desc: 'Flip whoosh — the big turnaround (all branches)' },
+  { cue: 'flip',     beat: 'reveal',      type: 'oneshot', desc: 'Flip whoosh — deduction pills flip face-out' },
+  { cue: 'ding',     beat: 'revealHold', offset: 0.71, type: 'oneshot', desc: 'POP 1 (both pills) — ding, lands just before the peak (ALL conditions)' },
+  { cue: 'ding',     beat: 'revealHold', offset: 1.01, type: 'oneshot', desc: 'POP 2 (both pills) — ding (ALL conditions)' },
+  { cue: 'ding',     beat: 'revealHold', offset: 1.31, type: 'oneshot', desc: 'POP 3 (both pills) — ding (ALL conditions)' },
+  { cue: 'flip',     beat: 'rehide',      type: 'oneshot', desc: 'Flip whoosh — pills flip back to hidden' },
+  { cue: 'tubeSlide', beat: 'exit',       type: 'oneshot', desc: 'Slide whistle: pill into + down the tube (2.2s)' },
+  { cue: 'vibrate',  beat: 'preSpit',  type: 'oneshot', desc: 'Vibration rattle (2.5s, cartoon hollow object) — matches the preSpit shake, builds to the pop' },
+  { cue: 'pop',      beat: 'spit',        type: 'oneshot', desc: 'Tube snaps the pill out' },
+  { cue: 'revealChime', beat: 'dispense', type: 'oneshot', desc: 'Identity reveal chime + firework' },
+];
+// Random-lottery cues: same clips, no orbit whoosh; the flip whistle now fires on
+// the turn-in-place (rTurn). The tail (slide whistle, ding ×3, vibrate, pop, chime)
+// reuses the shared phase names, so it sounds identical to the spinning draw.
+const SOUND_CUES_RANDOM = [
+  { cue: 'happySeq', beat: 'yellowDance', type: 'oneshot' },
+  { cue: 'angrySeq', beat: 'redDance',    type: 'oneshot' },
+  { cue: 'flip',     beat: 'rTurn', offset: 0.2, type: 'oneshot' },   // turn around in place
+  { cue: 'flip',     beat: 'reveal',      type: 'oneshot' },
+  { cue: 'ding',     beat: 'revealHold', offset: 0.71, type: 'oneshot' },
+  { cue: 'ding',     beat: 'revealHold', offset: 1.01, type: 'oneshot' },
+  { cue: 'ding',     beat: 'revealHold', offset: 1.31, type: 'oneshot' },
+  { cue: 'flip',     beat: 'rehide',      type: 'oneshot' },
+  { cue: 'tubeSlide', beat: 'exit',       type: 'oneshot' },          // slide whistle, drop into tube
+  { cue: 'vibrate',  beat: 'preSpit',     type: 'oneshot' },
+  { cue: 'pop',      beat: 'spit',        type: 'oneshot' },
+  { cue: 'revealChime', beat: 'dispense', offset: -0.22, type: 'oneshot' },
+];
+const modeCues = () => lotteryMode === 'occlusion' ? SOUND_CUES_RANDOM : SOUND_CUES;
+const modePH   = () => lotteryMode === 'occlusion' ? PH_R : PH;
+const SOUND_DEFAULTS = { happySeq: 'seq_happy.mp3', angrySeq: 'seq_angry.mp3',
+  orbit: 'whoosh_orbit_flat.mp3', tubeSlide: 'tube_slide.mp3', pop: 'pop__light0', ding: 'ding.mp3', flip: 'flip.mp3', vibrate: 'vibrate.mp3', revealChime: 'reveal_combo.mp3',
+  collision: 'pill_collision.mp3' };
+const SOUND_MAP = (() => {
+  let saved = {}; try { saved = JSON.parse(localStorage.getItem('lotterySoundMap') || '{}'); } catch (e) {}
+  return { ...SOUND_DEFAULTS, ...saved };
+})();
+let soundOn = (localStorage.getItem('lotterySoundOn') ?? '1') === '1';
+const saveSoundMap = () => { try { localStorage.setItem('lotterySoundMap', JSON.stringify(SOUND_MAP)); } catch (e) {} };
+
+const audioCache = {};
+const waBuffers = {};   // file → decoded AudioBuffer for instant scrub-seek
+const waDecoding = new Set();
+const waSyncNodes = []; // WA nodes started by syncAudioToTime; stopped on next scrub/close
+function decodeForSync(file) {
+  if (!file || waBuffers[file] || waDecoding.has(file) || !audioCtx) return;
+  waDecoding.add(file);
+  const src = file.includes('.') ? file : file + '.ogg';
+  fetch(SOUND_DIR + src)
+    .then(r => r.arrayBuffer()).then(b => audioCtx.decodeAudioData(b))
+    .then(buf => { waBuffers[file] = buf; waDecoding.delete(file); })
+    .catch(() => { waDecoding.delete(file); });
+}
+function getAudio(file) {
+  if (!file) return null;
+  if (!audioCache[file]) { const src = file.includes('.') ? file : file + '.ogg'; const a = new Audio(SOUND_DIR + src); a.preload = 'auto'; audioCache[file] = a; }
+  return audioCache[file];
+}
+function preloadSounds() { for (const k in SOUND_MAP) getAudio(SOUND_MAP[k]); }
+
+function playCue(cue) {
+  if (!soundOn) return;
+  if (cue === 'orbit') { playOrbitWA(); return; }   // orbit uses the Web Audio envelope player
+  const a = getAudio(SOUND_MAP[cue]); if (!a) return;
+  try { a.loop = false; a.currentTime = 0; a.play().catch(() => {}); } catch (e) {}
+}
+
+// --- Orbit whoosh: Web Audio so its envelope (start / fade / peak) is applied
+//     live at playback and tunable from the left-side panel without re-rendering. ---
+// Span the whoosh from the pills first flying into the ring (flySquare) through
+// the end of the orbit, so it covers the whole "go to the circle + float around"
+// gesture instead of starting late at the orbit. Tracks the timeline via PH.
+const ORBIT_DUR = PH.orbit.t1 - PH.orbit.t0;       // exactly the orbit phase (3.6s) — only while circling
+// Orbit-whoosh gain envelope: short lead-in so it comes up as the pills start
+// circling, swells with the speed, fades as they settle. Shapes the flat whoosh live.
+const orbitEnv = { start: 0.20, fade: 1.40, peak: 0.45 };
+let audioCtx = null, orbitBuf = null, orbitLoading = null;
+function ensureOrbitBuffer() {
+  if (orbitBuf || orbitLoading) return orbitLoading;
+  if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
+  orbitLoading = fetch(SOUND_DIR + SOUND_MAP.orbit)
+    .then(r => r.arrayBuffer()).then(b => audioCtx.decodeAudioData(b))
+    .then(buf => { orbitBuf = buf; }).catch(() => {});
+  return orbitLoading;
+}
+// Build the gain envelope on a GainNode: silence for `start`, ramp up over `fade`
+// to `peak`, hold, ramp down over `fade` to silence — clamped to a triangle if
+// the two fades don't fit. t0 is an AudioContext time.
+function applyOrbitEnv(gain, t0) {
+  const T = ORBIT_DUR, start = orbitEnv.start, peak = orbitEnv.peak;
+  let fade = orbitEnv.fade;
+  const span = T - start;
+  if (2 * fade > span) fade = span / 2;            // collapse plateau → triangle
+  const g = gain.gain;
+  g.cancelScheduledValues(t0);
+  g.setValueAtTime(0.0001, t0);
+  g.setValueAtTime(0.0001, t0 + start);
+  g.linearRampToValueAtTime(Math.max(0.0001, peak), t0 + start + fade);
+  g.setValueAtTime(Math.max(0.0001, peak), t0 + Math.max(start + fade, T - fade));
+  g.linearRampToValueAtTime(0.0001, t0 + T);
+}
+let orbitSrc = null;
+function playOrbitWA(offset = 0) {
+  const ready = ensureOrbitBuffer();
+  const go = () => {
+    if (!orbitBuf || !audioCtx) return;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    stopOrbitWA();
+    const src = audioCtx.createBufferSource(); src.buffer = orbitBuf;
+    src.loop = true;                          // clip (~3.6s) loops to fill the longer ORBIT_DUR span
+    const gain = audioCtx.createGain();
+    src.connect(gain).connect(audioCtx.destination);
+    // Shift the envelope back by `offset` so we land mid-envelope when catching up.
+    const t0 = audioCtx.currentTime - offset;
+    applyOrbitEnv(gain, t0);
+    // Start at the right point within the loop; stop at the envelope end so the
+    // looping source doesn't keep running (silently) forever.
+    const bufLen = orbitBuf.duration || ORBIT_DUR;
+    src.start(0, Math.max(0, offset) % bufLen);
+    try { src.stop(Math.max(audioCtx.currentTime + 0.01, t0 + ORBIT_DUR)); } catch (e) {}
+    orbitSrc = src;
+    src.onended = () => { if (orbitSrc === src) orbitSrc = null; };
+  };
+  if (orbitBuf) go(); else if (ready) ready.then(go);
+}
+function stopOrbitWA() { if (orbitSrc) { try { orbitSrc.stop(); } catch (e) {} orbitSrc = null; } }
+
+// Pill-pill collision: Web Audio BufferSource per impact so sounds stack (polyphonic).
+let collBuf = null, collLoading = null;
+function ensureCollBuffer() {
+  if (collBuf || collLoading) return collLoading;
+  if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
+  collLoading = fetch(SOUND_DIR + SOUND_MAP.collision)
+    .then(r => r.arrayBuffer()).then(b => audioCtx.decodeAudioData(b))
+    .then(buf => { collBuf = buf; collLoading = null; }).catch(() => { collLoading = null; });
+  return collLoading;
+}
+function playCollisionWA() {
+  if (!soundOn || !collBuf || !audioCtx) return;
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  const src = audioCtx.createBufferSource();
+  src.buffer = collBuf;
+  src.connect(audioCtx.destination);
+  src.start();
+}
+
+// Looping cue (shuffle) — tracked so it can be started/stopped independently.
+let loopEl = null, loopCue = null;
+function startLoop(cue) {
+  if (!soundOn) return;
+  const a = getAudio(SOUND_MAP[cue]); if (!a) return;
+  loopEl = a; loopCue = cue;
+  try { a.loop = true; a.currentTime = 0; a.play().catch(() => {}); } catch (e) {}
+}
+function stopLoop() { if (loopEl) { try { loopEl.pause(); loopEl.loop = false; } catch (e) {} loopEl = null; loopCue = null; } stopOrbitWA(); }
+
+// Edge-triggered scheduler: fire cues whose beat-start lies in (a, b] on
+// FORWARD playback only. Seeking re-anchors audioPrevT so nothing backfires.
+let audioPrevT = 0;
+function scanSounds(a, b) {
+  if (b <= a) return;                       // forward playback only
+  const cues = modeCues(), PHm = modePH();
+  for (const c of cues) {
+    if (c.branches && !c.branches.includes(currentBranch)) continue;  // condition-gated cue
+    const ph = PHm[c.beat]; if (!ph) continue;
+    const fire = ph.t0 + (c.offset || 0);
+    if (c.type === 'loop') {
+      if (a < fire && b >= fire) startLoop(c.cue);
+      if (loopCue === c.cue && b >= ph.t1) stopLoop();
+    } else if (a < fire && b >= fire) {
+      playCue(c.cue);
+    }
+  }
+}
+
+// Silence every cue (one-shots + orbit WA + any loop + seek-sync WA nodes).
+function stopAllSounds() {
+  stopLoop();
+  for (const f in audioCache) { try { audioCache[f].pause(); } catch (e) {} }
+  for (const s of waSyncNodes) { try { s.stop(); } catch (e) {} }
+  waSyncNodes.length = 0;
+}
+
+// Reveal sound fires 220 ms before the dispense frame (locked, tuned value).
+const revealCue = SOUND_CUES.find(c => c.cue === 'revealChime');
+if (revealCue) revealCue.offset = -0.22;
+
+// Catch-up: make the audio reflect the moment `t` after a scrub. Each cue whose
+// clip would STILL be sounding at t resumes from the correct offset; cues that
+// already finished (or haven't started) stay silent.
+// Uses WebAudio buffers for instant seeking (no HTMLAudioElement seek latency).
+// Falls back to <audio>.currentTime on the first scrub before buffers are decoded.
+function syncAudioToTime(t) {
+  stopAllSounds();
+  if (!soundOn) return;
+  // Ensure audioCtx exists (user just gestured — safe), then kick off decoding
+  // all sounds so subsequent scrubs are instant even if this one falls back.
+  ensureOrbitBuffer(); ensureCollBuffer();
+  if (audioCtx) { for (const k in SOUND_MAP) decodeForSync(SOUND_MAP[k]); }
+  for (const c of modeCues()) {
+    if (c.branches && !c.branches.includes(currentBranch)) continue;
+    const ph = modePH()[c.beat]; if (!ph) continue;
+    const t0 = ph.t0 + (c.offset || 0);
+    if (t < t0) continue;                          // hasn't started yet
+    const offset = t - t0;
+    if (c.type === 'loop') {
+      if (t < ph.t1) { startLoop(c.cue); if (loopEl) { try { loopEl.currentTime = offset % (loopEl.duration || offset || 1); } catch (e) {} } }
+      continue;
+    }
+    if (c.cue === 'orbit') { if (offset < ORBIT_DUR) playOrbitWA(offset); continue; }
+    const file = SOUND_MAP[c.cue];
+    const buf = waBuffers[file];
+    if (buf && audioCtx) {
+      // Instant: schedule buffer playback from the right offset — no seek latency.
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const node = audioCtx.createBufferSource();
+      node.buffer = buf;
+      node.connect(audioCtx.destination);
+      const startOff = Math.min(offset, buf.duration - 0.001);
+      if (startOff >= 0 && startOff < buf.duration) {
+        node.start(0, startOff);
+        waSyncNodes.push(node);
+      }
+    } else {
+      // Fallback: HTMLAudioElement seek (~100–300 ms latency until WA buffer is ready).
+      const a = getAudio(file); if (!a) continue;
+      const dur = a.duration;
+      if (!isFinite(dur) || offset < dur) {
+        try { a.loop = false; a.currentTime = isFinite(dur) ? Math.min(offset, dur - 0.01) : offset; a.play().catch(() => {}); } catch (e) {}
+      }
+    }
+  }
+}
+
+
+// ===================================================================
+// 7) UI wiring + canvas sizing.
+// ===================================================================
+const ASPECT = VBW / VBH;
+function fitCanvas() {
+  // The canvas is pinned by CSS to fill the stage (full viewport). We only
+  // measure its actual rendered box to set a matching backing store; we never
+  // set its CSS size in JS, so JS can't make the element overflow.
+  const cssW = canvas.clientWidth || document.documentElement.clientWidth;
+  const cssH = canvas.clientHeight || document.documentElement.clientHeight;
+  const MARGIN = 0.92;                             // small breathing room so strokes/firework don't touch edges
+  // Backing store SUPERSAMPLED past device resolution. A pill is only ~11% of
+  // the scene height, so at plain device-res it lands on just ~200 px even on a
+  // big window — far fewer than the 1542 px source — and reads as low-res next
+  // to the raw PNG. Rendering at 2× the device ratio gives the art ~4× the
+  // pixels to resolve from; the browser downsamples to the screen cleanly.
+  const SS = 2;                                    // supersample multiplier
+  const dpr = Math.min((window.devicePixelRatio || 1) * SS, 4);
+  canvas.width = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  const s = Math.min(canvas.width / VBW, canvas.height / VBH) * MARGIN;
+  const tx = (canvas.width - VBW * s) / 2 - VBX * s;
+  const ty = (canvas.height - VBH * s) / 2 - VBY * s;
+  ctx.setTransform(s, 0, 0, s, tx, ty);
+  renderFrame(curT);
+}
+window.addEventListener('resize', fitCanvas);
+
+// Triggers: any [data-play] button opens the modal for that branch; close via
+// the × button / backdrop click / Escape; replay re-runs the current branch.
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-play]');
+  if (btn && !btn.disabled) { playAnimation(btn.dataset.play); return; }
+  if (e.target.closest('#modal-close'))     { closeAnimation(); return; }
+  if (e.target.id === 'modal-backdrop')     { closeAnimation(); return; }
+  if (e.target.closest('#modal-playpause')) { togglePlay(); return; }
+  if (e.target.closest('#modal-replay'))    { playAnimation(currentBranch); return; }
+});
+document.addEventListener('keydown', (e) => {
+  const open = document.getElementById('modal-backdrop').classList.contains('open');
+  if (e.key === 'Escape') { closeAnimation(); return; }
+  if (open && (e.key === ' ' || e.code === 'Space')) { e.preventDefault(); togglePlay(); }
+});
+// Lottery-mode selector. The hash deep-link (#random or #random-<seedIdx>) lets
+// the render harness target Random mode and pin a seed for reproducible frames.
+(function initModeToggle() {
+  const tog = document.getElementById('mode-toggle');
+  const h = (location.hash || '').toLowerCase();
+  if (h.includes('occlusion') || h.includes('random')) { const m = h.match(/(?:occlusion|random)-?(\d+)/); setLotteryMode('occlusion', m ? parseInt(m[1], 10) : undefined); }
+  if (tog) tog.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-mode]'); if (!b) return;
+    if (b.dataset.mode === lotteryMode) return;
+    setLotteryMode(b.dataset.mode);
+    renderTrials();                                   // swap the event-type thumbnails for this mode
+  });
+  syncModeButtons();
+})();
+buildSeedBar();  // populate the modal seed selector
+
+syncPlayBtn();   // initial icon
+preloadSounds(); // warm the chosen clips so the first cue isn't late
+
+fitCanvas();
+renderFrame(0);   // idle first frame
+
+// ----------------------------------------------------------------
+// Render the timeline-driven static thumbnails now that the engine
+// block above has defined the timeline (TIMELINE / PH / at / buildKeyframes).
+// ----------------------------------------------------------------
+function flipThumbs(containerSelector) {
+  const els = document.querySelectorAll(containerSelector);
+  els.forEach(el => {
+    el.classList.remove('thumb-flipping');
+    // Force reflow so removing then re-adding the class restarts the animation.
+    void el.offsetWidth;
+    el.classList.add('thumb-flipping');
+    el.addEventListener('animationend', () => el.classList.remove('thumb-flipping'), { once: true });
+  });
+}
+
+function rerenderAll() {
+  renderTrials();
+  renderTrainGroups();
+  renderTestStrip();
+
+  requestAnimationFrame(renderConvergeArrows);
+}
+
+function rerenderAllWithFlip() {
+  renderTrials();
+  renderTrainGroups();
+  renderTestStrip();
+
+  requestAnimationFrame(renderConvergeArrows);
+  requestAnimationFrame(() => {
+    flipThumbs('.mini-thumb');
+  });
+}
+
+function rerenderWithFreqFlip() {
+  renderTrainGroups();
+  renderTestStrip();
+
+  requestAnimationFrame(() => {
+    flipThumbs('.train-sub .mini-thumb svg');
+  });
+}
+
+function pulseTestFrames() {
+  document.querySelectorAll('#test-strip .mini-thumb').forEach(el => {
+    el.classList.remove('border-pulsing');
+    void el.offsetWidth; // force reflow
+    el.classList.add('border-pulsing');
+    el.addEventListener('animationend', () => el.classList.remove('border-pulsing'), { once: true });
+  });
+}
+
+function rerenderWithOrderFlip() {
+  renderTrainGroups();
+  renderTestStrip();
+
+  requestAnimationFrame(() => {
+    pulseTestFrames();
+  });
+}
+
+function wireCounterbalance() {
+  const YELLOW_HEX = '#C9A000', RED_HEX = '#C03028';
+  function seqDots(pattern) {
+    return pattern.map(k =>
+      `<span class="cb-seq-dot" style="background:${k === 'happy' ? YELLOW_HEX : RED_HEX}"></span>`
+    ).join('');
+  }
+  const seqA = document.getElementById('seq-a');
+  const seqB = document.getElementById('seq-b');
+  if (seqA) seqA.innerHTML = seqDots(TEST_PATTERN_A);
+  if (seqB) seqB.innerHTML = seqDots(TEST_PATTERN_B);
+
+  const btnYellow = document.getElementById('cb-yellow');
+  const btnRed    = document.getElementById('cb-red');
+  if (btnYellow && btnRed) {
+    btnYellow.addEventListener('click', () => {
+      if (frequentKind === 'happy') return;
+      frequentKind = 'happy'; applyCFG();
+      btnYellow.classList.add('active'); btnRed.classList.remove('active');
+      rerenderWithFreqFlip();
+    });
+    btnRed.addEventListener('click', () => {
+      if (frequentKind === 'angry') return;
+      frequentKind = 'angry'; applyCFG();
+      btnRed.classList.add('active'); btnYellow.classList.remove('active');
+      rerenderWithFreqFlip();
+    });
+  }
+
+  const btnA = document.getElementById('cb-order-a');
+  const btnB = document.getElementById('cb-order-b');
+  if (btnA && btnB) {
+    btnA.addEventListener('click', () => {
+      if (!testOrderB) return;
+      testOrderB = false;
+      btnA.classList.add('active'); btnB.classList.remove('active');
+      rerenderWithOrderFlip();
+    });
+    btnB.addEventListener('click', () => {
+      if (testOrderB) return;
+      testOrderB = true;
+      btnB.classList.add('active'); btnA.classList.remove('active');
+      rerenderWithOrderFlip();
+    });
+  }
+}
+
+rerenderAll();
+wireCounterbalance();
+</script>
+</body>
+</html>
