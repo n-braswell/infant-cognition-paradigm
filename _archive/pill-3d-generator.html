@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pill Rotation — 3D Frame Generator</title>
+<style>
+  :root{ --bg:#16181d; --panel:#1f2228; --panel2:#272b33; --line:#33373f; --ink:#eef0f3;
+    --muted:#9aa1ad; --accent:#f2c200; --accent2:#e23b2e; --ok:#37c87a; --radius:12px; }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;}
+  body{background:var(--bg);color:var(--ink);
+    font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    display:grid;grid-template-columns:minmax(320px,1fr) 380px;min-height:100%;}
+  .stage{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px;gap:16px;}
+  .stage-wrap{position:relative;border-radius:var(--radius);border:1px solid var(--line);
+    background:#ffffff;
+    display:flex;align-items:center;justify-content:center;gap:20px;overflow:hidden;}
+  canvas#view,canvas#rawcut{display:block;}
+  .viewlbl{position:absolute;top:6px;font:600 10px/1 ui-sans-serif,-apple-system,sans-serif;
+    letter-spacing:.08em;color:var(--muted);text-transform:uppercase;pointer-events:none;z-index:2;}
+  .viewlbl.l{left:8px;} .viewlbl.r{right:8px;}
+  .scrub{display:flex;align-items:center;gap:12px;width:100%;max-width:440px;}
+  .scrub input[type=range]{flex:1;}
+  .readout{font-variant-numeric:tabular-nums;color:var(--muted);font-size:13px;min-width:120px;text-align:right;}
+  .tabs{display:flex;gap:8px;}
+  .tab{padding:6px 14px;border-radius:999px;border:1px solid var(--line);background:var(--panel);
+    color:var(--muted);cursor:pointer;font-size:13px;}
+  .tab.on{background:var(--accent);color:#1a1c22;border-color:var(--accent);font-weight:600;}
+  .tab.angry.on{background:var(--accent2);color:#fff;border-color:var(--accent2);}
+  .panel{background:var(--panel);border-left:1px solid var(--line);padding:22px;overflow-y:auto;
+    display:flex;flex-direction:column;gap:18px;}
+  h1{font-size:14px;margin:0;letter-spacing:.02em;}
+  .sub{font-size:12px;color:var(--muted);line-height:1.5;margin:0;}
+  .group{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line);padding-top:16px;}
+  .group h2{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 2px;}
+  label.row{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;}
+  label.row input[type=range]{width:150px;}
+  label.row input[type=color]{width:46px;height:24px;padding:0;border:1px solid var(--line);background:none;}
+  label.row .val{font-variant-numeric:tabular-nums;color:var(--accent);min-width:46px;text-align:right;}
+  .file{font-size:12px;display:flex;flex-direction:column;gap:4px;}
+  .file input{font-size:11px;color:var(--muted);}
+  .file .name{color:var(--ok);font-size:11px;}
+  button.btn{padding:10px 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);
+    color:var(--ink);cursor:pointer;font-size:13px;font-weight:600;}
+  button.btn:hover{border-color:var(--accent);}
+  button.go{background:var(--ok);color:#0c1a12;border-color:var(--ok);}
+  button.go:disabled{opacity:.5;cursor:default;}
+  .status{font-size:12px;color:var(--muted);min-height:18px;}
+  .chk{display:flex;align-items:center;gap:8px;font-size:13px;}
+  code{background:var(--panel2);padding:1px 5px;border-radius:4px;font-size:11px;}
+  #err{color:var(--accent2);font-size:12px;}
+  .strip{ grid-column:1/-1; display:flex;flex-wrap:wrap;gap:6px;padding:14px 18px;background:var(--panel);border-top:1px solid var(--line);justify-content:center; }
+  .strip .cell{ display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer; }
+  .strip .cell img{ height:80px;border:1px solid var(--line);border-radius:6px;background:#0d0f12;display:block; }
+  .strip .cell span{ font-size:9px;color:var(--muted);font-variant-numeric:tabular-nums; }
+  .strip .cell:hover img{ border-color:var(--accent); }
+  .strip .cell.sel img{ border-color:var(--accent);border-width:2px; }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="tabs">
+      <div class="tab on" data-kind="happy" id="tabHappy">happy → yellow</div>
+      <div class="tab angry" data-kind="angry" id="tabAngry">angry → red</div>
+    </div>
+    <div class="stage-wrap"><span class="viewlbl l">3D render</span><span class="viewlbl r">Raw cut</span></div>
+    <div class="scrub">
+      <button class="btn" id="play">▶</button>
+      <input type="range" id="angle" min="0" max="180" step="1" value="0">
+      <div class="readout" id="readout">0° · frame 000</div>
+    </div>
+    <div id="err"></div>
+  </div>
+
+  <div class="panel">
+    <div>
+      <h1>Pill Rotation — 3D Frame Generator</h1>
+      <p class="sub">Extrudes your pill outline into a real 3D tablet, maps the front/back art onto it, lights it, and rotates it under a perspective camera. Renders the genuine 0→180° turn and exports <code>yellow_NNN.png</code>/<code>red_NNN.png</code> into <code>_shared/frames/</code>.</p>
+    </div>
+
+    <div class="group">
+      <h2>Source art (PNG, transparent bg)</h2>
+      <div class="file">happy front <input type="file" accept="image/png" id="fHappy"><span class="name" id="nHappy"></span></div>
+      <div class="file">angry front <input type="file" accept="image/png" id="fAngry"><span class="name" id="nAngry"></span></div>
+      <div class="file">shared back <input type="file" accept="image/png" id="fBack"><span class="name" id="nBack"></span></div>
+    </div>
+
+    <div class="group">
+      <h2>3D body</h2>
+      <label class="row">depth÷width<input type="range" id="cThick" min="0.2" max="1.2" step="0.02" value="1.0"><span class="val" id="vThick">1.00</span></label>
+      <label class="row">edge round<input type="range" id="cBevel" min="0" max="0.5" step="0.02" value="0.3"><span class="val" id="vBevel">0.30</span></label>
+      <label class="row">perspective<input type="range" id="cFov" min="8" max="55" step="1" value="26"><span class="val" id="vFov">26</span></label>
+      <label class="row">edge colour<input type="color" id="cEdge" value="#d9a300"><span class="val" id="vEdge"></span></label>
+      <label class="chk"><input type="checkbox" id="cAutoEdge" checked> auto edge colour from art</label>
+    </div>
+
+    <div class="group">
+      <h2>Lighting</h2>
+      <label class="row">key light<input type="range" id="cKey" min="0" max="2" step="0.05" value="1.05"><span class="val" id="vKey">1.05</span></label>
+      <label class="row">ambient<input type="range" id="cAmb" min="0" max="1.5" step="0.05" value="0.7"><span class="val" id="vAmb">0.70</span></label>
+      <label class="row">light angle<input type="range" id="cLx" min="-1.5" max="1.5" step="0.1" value="-1"><span class="val" id="vLx">-1.0</span></label>
+    </div>
+
+    <div class="group">
+      <h2>Frames + export</h2>
+      <label class="row">frames (0→180°)<input type="range" id="cFrames" min="13" max="73" step="1" value="37"><span class="val" id="vFrames">37</span></label>
+      <label class="row">back Y nudge<input type="range" id="cBackDy" min="-0.15" max="0.15" step="0.005" value="0"><span class="val" id="vBackDy">0.00</span></label>
+      <button class="btn go" id="exportAll">⬇ Export all frames → pick _shared/frames/</button>
+      <button class="btn" id="exportOne">Download current frame only</button>
+      <div class="status" id="status"></div>
+      <p class="sub">Chrome writes all 74 files directly into the folder you pick. Output res locks to the happy-front pixel height.</p>
+    </div>
+  </div>
+
+  <div class="strip" id="strip"></div>
+
+<script type="importmap">
+{ "imports": { "three": "../_shared/vendor/three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+const $ = s => document.getElementById(s);
+const wrap = document.querySelector('.stage-wrap');
+
+const IMG = { happy:null, angry:null, back:null };
+const BBOX = { happy:null, angry:null, back:null };
+const SRC = { happy:'../_shared/happy_cut.png', angry:'../_shared/angry_cut.png', back:'../_shared/back_new.png' };
+const state = { kind:'happy', angle:0, frames:37, thick:0.12, bevel:0.30, fov:28,
+  edge:'#c4c4c4', autoEdge:false, grayBack:true, key:1.05, amb:0.80, lx:-1.0, backDy:0, view:'full', playing:false };
+
+// ---- alpha bbox + auto edge colour (2D scratch) ----
+const scratch=document.createElement('canvas'), sctx=scratch.getContext('2d',{willReadFrequently:true});
+function analyze(img){
+  const w=img.naturalWidth,h=img.naturalHeight; scratch.width=w; scratch.height=h;
+  sctx.clearRect(0,0,w,h); sctx.drawImage(img,0,0);
+  let d; try{ d=sctx.getImageData(0,0,w,h).data; }catch(e){ return {bbox:{x:0,y:0,w,h},edge:'#999'}; }
+  let minX=w,minY=h,maxX=0,maxY=0,found=false;
+  let rSum=0,gSum=0,bSum=0,nOpaque=0;
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){ const a=d[(y*w+x)*4+3];
+    if(a>16){ found=true; if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y; } }
+  const bbox=found?{x:minX,y:minY,w:maxX-minX+1,h:maxY-minY+1}:{x:0,y:0,w,h};
+  // edge colour ≈ median-ish of opaque, non-black, saturated pixels near vertical centre band
+  const y0=bbox.y+bbox.h*0.35|0, y1=bbox.y+bbox.h*0.65|0;
+  for(let y=y0;y<y1;y++)for(let x=bbox.x;x<bbox.x+bbox.w;x++){ const i=(y*w+x)*4;
+    const a=d[i+3]; if(a<200) continue; const r=d[i],g=d[i+1],b=d[i+2];
+    if(r+g+b<90) continue;                         // skip outline black
+    rSum+=r;gSum+=g;bSum+=b;nOpaque++; }
+  let edge='#999';
+  if(nOpaque){ const r=(rSum/nOpaque*0.8)|0,g=(gSum/nOpaque*0.8)|0,b=(bSum/nOpaque*0.8)|0;
+    edge='#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join(''); }
+  return {bbox,edge};
+}
+
+// ---- three.js scene ----
+let renderer, scene, camera, key, amb, pill=null, builtFor=null, rawCv=null, rawCtx=null, viewCv=null, viewCtx=null, glCv=null;
+let dispW=0, dispH=0;
+const RAW_FADE_DEG=10;   // the raw cut IS the whole front at 0°, blending into the 3D turn by this angle
+
+// Draw the source cut (untouched PNG, cropped to its pill bbox) into ctx at outW×outH,
+// at the SAME footprint the 3D camera frames it (pill = 2/2.06 of height, centred), so
+// the cut and the 3D render register pixel-for-pixel.
+function drawCutInto(ctx, kind, outW, outH){
+  const img=IMG[kind]||IMG.happy, bb=BBOX[kind]||BBOX.happy; if(!img||!bb) return;
+  ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
+  const s=2.0/2.06, dw=outW*s, dh=outH*s;
+  ctx.drawImage(img, bb.x,bb.y,bb.w,bb.h, (outW-dw)/2,(outH-dh)/2, dw,dh);
+}
+function fadeOp(angDeg){ return Math.max(0, Math.min(1, 1-angDeg/RAW_FADE_DEG)); }
+// The shared back image (back_new), drawn at ITS OWN aspect into outW×outH at the same
+// 2/2.06 footprint. Kind-independent → both colours' back frame come out identical.
+function drawBackInto(ctx, outW, outH){
+  const img=IMG.back, bb=BBOX.back; if(!img||!bb) return;
+  ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
+  const s=2.0/2.06, dw=outW*s, dh=outH*s;
+  ctx.drawImage(img, bb.x,bb.y,bb.w,bb.h, (outW-dw)/2,(outH-dh)/2, dw,dh);
+}
+
+// Build the final frame into a 2D context. This is the ONE render path (display, strip,
+// export, headless bake), so what you see is exactly what bakes.
+//   op==1 (0°)      → ONLY the raw cut. Nothing rendered behind it. Pixel-for-pixel PNG.
+//   op<1  (turning) → render the 3D turn, CLIP it to the cut's silhouette so it can never
+//                     extend past the cut's lines (caps the defringe halo / any bleed),
+//                     then lay the raw cut over it at op so it blends out as it turns.
+function compose2D(ctx, kind, angDeg, outW, outH){
+  const c=ctx.canvas;
+  const opF=fadeOp(angDeg), opB=fadeOp(180-angDeg);
+  // 180° → ONLY the shared back image, at the back's own aspect, kind-INDEPENDENT, so
+  // red_036 and yellow_036 are byte-identical. Nothing rendered behind it.
+  if(opB>=1){
+    const bb=BBOX.back, wb=bb?Math.round(outH*bb.w/bb.h):outW;
+    if(c.width!==wb)c.width=wb; if(c.height!==outH)c.height=outH;
+    ctx.globalAlpha=1; ctx.globalCompositeOperation='source-over'; ctx.clearRect(0,0,wb,outH);
+    drawBackInto(ctx,wb,outH); return;
+  }
+  if(c.width!==outW) c.width=outW; if(c.height!==outH) c.height=outH;
+  ctx.globalAlpha=1; ctx.globalCompositeOperation='source-over'; ctx.clearRect(0,0,outW,outH);
+  // 0° → ONLY the front cut, pixel-for-pixel.
+  if(opF>=1){ drawCutInto(ctx,kind,outW,outH); return; }
+  // turning → render 3D, cap to the cut silhouette, then blend the raw face/back over it.
+  renderer.setSize(outW,outH,false); setCam(outW,outH);
+  ensurePill(kind); if(pill) pill.rotation.y=angDeg*Math.PI/180; renderer.render(scene,camera);
+  ctx.drawImage(glCv,0,0,outW,outH);
+  ctx.globalCompositeOperation='destination-in'; drawCutInto(ctx,kind,outW,outH);   // cap to the cut's lines
+  ctx.globalCompositeOperation='source-over';
+  if(opF>0){ ctx.globalAlpha=opF; drawCutInto(ctx,kind,outW,outH); }   // raw front near 0°
+  if(opB>0){ ctx.globalAlpha=opB; drawBackInto(ctx,outW,outH); }       // raw back near 180°
+  ctx.globalAlpha=1;
+}
+// Comparison canvas (#rawcut): always the untouched cut, same size as #view.
+function drawRawCut(){
+  if(!rawCtx||!dispW) return;
+  const dpr=window.devicePixelRatio||1, back=state.angle>90;
+  const bb = back ? BBOX.back : (BBOX[state.kind]||BBOX.happy); if(!bb) return;
+  const cssW = back ? Math.round(dispH*bb.w/bb.h) : dispW;
+  rawCv.width=Math.round(cssW*dpr); rawCv.height=Math.round(dispH*dpr);
+  rawCv.style.width=cssW+'px'; rawCv.style.height=dispH+'px';
+  rawCtx.clearRect(0,0,rawCv.width,rawCv.height);
+  if(back) drawBackInto(rawCtx, rawCv.width, rawCv.height);
+  else drawCutInto(rawCtx, state.kind, rawCv.width, rawCv.height);
+}
+function initGL(){
+  renderer = new THREE.WebGLRenderer({ alpha:true, antialias:true, preserveDrawingBuffer:true });
+  renderer.setClearColor(0x000000, 0);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  glCv = renderer.domElement;   // OFFSCREEN — never appended; its output is composited in 2D
+  viewCv = document.createElement('canvas'); viewCv.id='view'; wrap.appendChild(viewCv);
+  viewCtx = viewCv.getContext('2d');
+  rawCv = document.createElement('canvas'); rawCv.id='rawcut'; wrap.appendChild(rawCv);
+  rawCtx = rawCv.getContext('2d');
+  scene = new THREE.Scene();
+  // ORTHOGRAPHIC — the front is dead-flat/pixel-exact and no side peeks at 0°.
+  camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
+  camera.position.set(0,0,10); camera.lookAt(0,0,0);
+  amb = new THREE.AmbientLight(0xffffff, state.amb); scene.add(amb);
+  key = new THREE.DirectionalLight(0xffffff, state.key); key.position.set(state.lx,1.3,2.2); scene.add(key);
+  const fill = new THREE.DirectionalLight(0xffffff, 0.25); fill.position.set(1.2,-0.4,1.0); scene.add(fill);
+}
+// set the orthographic frustum to fit the pill (height H=2) for a canvas of w×h
+function setCam(cw,ch){ const hh=1.03, hw=hh*(cw/ch);
+  camera.left=-hw; camera.right=hw; camera.top=hh; camera.bottom=-hh; camera.updateProjectionMatrix(); }
+
+function roundedRectShape(w,h,r){
+  const s=new THREE.Shape(), hw=w/2, hh=h/2; r=Math.min(r,hw,hh);
+  s.moveTo(-hw+r,-hh); s.lineTo(hw-r,-hh); s.quadraticCurveTo(hw,-hh,hw,-hh+r);
+  s.lineTo(hw,hh-r); s.quadraticCurveTo(hw,hh,hw-r,hh); s.lineTo(-hw+r,hh);
+  s.quadraticCurveTo(-hw,hh,-hw,hh-r); s.lineTo(-hw,-hh+r); s.quadraticCurveTo(-hw,-hh,-hw+r,-hh);
+  return s;
+}
+// THREE.Shape traced from the art's own alpha silhouette (row scan; pills are convex).
+// Maps the bbox → the W×H plane so the body is EXACTLY the front face's shape/size.
+const _ascan=document.createElement('canvas'), _asctx=_ascan.getContext('2d',{willReadFrequently:true});
+function alphaShape(img, bbox, W, H){
+  const w=img.naturalWidth, h=img.naturalHeight;
+  _ascan.width=w; _ascan.height=h; _asctx.clearRect(0,0,w,h); _asctx.drawImage(img,0,0);
+  let a; try{ a=_asctx.getImageData(0,0,w,h).data; }catch(e){ return null; }
+  const N=150, L=[], R=[];
+  for(let sIdx=0;sIdx<=N;sIdx++){
+    const y=Math.min(h-1, Math.round(bbox.y + sIdx/N*(bbox.h-1)));
+    let xl=-1,xr=-1;
+    for(let x=bbox.x;x<bbox.x+bbox.w;x++){ if(a[(y*w+x)*4+3]>240){ xl=x; break; } }
+    for(let x=bbox.x+bbox.w-1;x>=bbox.x;x--){ if(a[(y*w+x)*4+3]>240){ xr=x; break; } }
+    if(xl<0) continue;
+    const py=(0.5-(y-bbox.y)/bbox.h)*H;
+    L.push([((xl-bbox.x)/bbox.w-0.5)*W, py]); R.push([((xr-bbox.x)/bbox.w-0.5)*W, py]);
+  }
+  if(L.length<4) return null;
+  const sh=new THREE.Shape(); sh.moveTo(L[0][0],L[0][1]);
+  for(let i=1;i<L.length;i++) sh.lineTo(L[i][0],L[i][1]);
+  for(let i=R.length-1;i>=0;i--) sh.lineTo(R[i][0],R[i][1]);
+  sh.closePath(); return sh;
+}
+// The source PNGs carry a 3–4px OPAQUE light-gray ramp (≈132→78→24→black) just
+// outside the drawn black outline — a matte fringe left by background removal.
+// alphaTest can't drop it (alpha=255), so it renders as a gray/white line hugging
+// the outline. We RECOLOR that rim to black (rather than eroding the alpha): any
+// opaque pixel within R px of the transparent edge is painted solid black. This
+// kills the halo WITHOUT trimming the silhouette, so the drawn outline keeps its
+// full, even, as-in-the-PNG thickness everywhere (no corner/edge unevenness — the
+// old alpha-erosion thinned diagonals by ~√2 and was the cause of that). Interior
+// whites (eyes, teeth, shirt) are far from the edge, so they're never touched.
+const DFR=new Map();
+function defringe(img,R=4){
+  const w=img.naturalWidth, h=img.naturalHeight;
+  const c=document.createElement('canvas'); c.width=w; c.height=h;
+  const g=c.getContext('2d',{willReadFrequently:true}); g.drawImage(img,0,0);
+  let id; try{ id=g.getImageData(0,0,w,h); }catch(e){ return img; }
+  const a=id.data, A=new Uint8Array(w*h), Tmp=new Uint8Array(w*h), T=new Uint8Array(w*h);
+  for(let i=0;i<w*h;i++) A[i]=a[i*4+3];
+  // T = min alpha over the R×R neighbourhood (separable horizontal then vertical).
+  for(let y=0;y<h;y++){ const o=y*w; for(let x=0;x<w;x++){ let m=255;
+    for(let dx=-R;dx<=R;dx++){ const xx=x+dx; const v=(xx<0||xx>=w)?0:A[o+xx]; if(v<m)m=v; } Tmp[o+x]=m; } }
+  for(let x=0;x<w;x++){ for(let y=0;y<h;y++){ let m=255;
+    for(let dy=-R;dy<=R;dy++){ const yy=y+dy; const v=(yy<0||yy>=h)?0:Tmp[yy*w+x]; if(v<m)m=v; } T[y*w+x]=m; } }
+  // Opaque pixel that has a transparent neighbour within R → it's the matte rim → black it.
+  for(let i=0;i<w*h;i++){ if(A[i]>40 && T[i]<200){ a[i*4]=0; a[i*4+1]=0; a[i*4+2]=0; } }
+  g.putImageData(id,0,0); return c;
+}
+function dfrOf(img){ if(!img) return img; let c=DFR.get(img); if(!c){ c=defringe(img); DFR.set(img,c); } return c; }
+function cropTexture(src,bbox){
+  const iw=src.naturalWidth||src.width, ih=src.naturalHeight||src.height;
+  const t=(src instanceof HTMLCanvasElement)?new THREE.CanvasTexture(src):new THREE.Texture(src);
+  t.colorSpace=THREE.SRGBColorSpace; t.anisotropy=8;
+  t.repeat.set(bbox.w/iw, bbox.h/ih);
+  t.offset.set(bbox.x/iw, 1-(bbox.y+bbox.h)/ih);
+  t.needsUpdate=true; return t;
+}
+function applyCrop(t,img,bbox){ const iw=img.naturalWidth, ih=img.naturalHeight;
+  t.repeat.set(bbox.w/iw, bbox.h/ih); t.offset.set(bbox.x/iw, 1-(bbox.y+bbox.h)/ih); return t; }
+// a subdivided plane DOMED in z — the artwork is painted onto this curved surface
+// so it foreshortens with the pill as it rotates (not a flat card).
+function domedPlane(W,H,depth,seg){
+  const g=new THREE.PlaneGeometry(W,H,seg,seg), p=g.attributes.position;
+  for(let i=0;i<p.count;i++){ const x=p.getX(i), y=p.getY(i);
+    const nx=2*x/W, ny=2*y/H, rr=nx*nx+ny*ny;
+    const z = rr<1 ? depth*Math.sqrt(1-rr) : 0;    // spherical cap → strong real curvature
+    p.setZ(i, z); }
+  g.computeVertexNormals(); return g;
+}
+// gray pill-shaped texture (the old "hidden" back) built from the face's alpha
+function grayMaskTexture(img,bbox,gray='#808080'){
+  const c=document.createElement('canvas'); c.width=img.naturalWidth; c.height=img.naturalHeight;
+  const g=c.getContext('2d'); g.drawImage(img,0,0);
+  g.globalCompositeOperation='source-in'; g.fillStyle=gray; g.fillRect(0,0,c.width,c.height);
+  const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; t.anisotropy=8;
+  return applyCrop(t,img,bbox);
+}
+function disposePill(){ if(!pill) return; scene.remove(pill);
+  pill.traverse(o=>{ if(o.geometry)o.geometry.dispose(); if(o.material){ if(o.material.map)o.material.map.dispose(); o.material.dispose(); } }); pill=null; }
+
+function buildPill(kind){
+  const face=IMG[kind]||IMG.happy, fb=BBOX[kind]||BBOX.happy;
+  if(!face||!fb) return;
+  disposePill();
+  const aspect=fb.w/fb.h, H=2.0, W=H*aspect, d=W*state.thick;
+  const r=Math.min(W/2,H/2), bevel=Math.min(state.bevel*d, r*0.9);
+  pill=new THREE.Group();
+  // The pill is a GRAY peel (unlit flat gray) with one UNIFORM black outline. Its
+  // silhouette is traced from the art's own alpha → exactly the front face's size &
+  // shape. Front cap shows the image (pasted exactly); side & back are the gray peel.
+  const view=state.view||'full', eps=W*0.006, AT=0.2;   // low alphaTest → keep the outline's anti-aliased edge (fringe already blacked by defringe, so no halo)
+  const faceD=dfrOf(face);   // alpha-eroded (matte fringe removed)
+  const shape=alphaShape(faceD, fb, W, H) || roundedRectShape(W, H, r);
+  const ow=W*0.026;   // black edge-line weight (matches the art's drawn outline)
+  const dz=Math.max(0.001, d-2*ow);
+  // Tiny inset so the body sits JUST inside the art's drawn black outline (the
+  // silhouette is traced with ~1px of AA, slightly proud) → no gray/white halo
+  // leaking past the outline on the front/back faces.
+  const fx=1-(ow*0.4)/(W/2), fy=1-(ow*0.4)/(H/2);
+  // Three coaxial perimeter bands, NON-overlapping in depth → zero coincident
+  // side-walls (the old z-fighting that showed as gray splotches is gone). Result:
+  // one uniformly light-gray side with a crisp black line at the front rim and one
+  // at the back rim — both visible edge-on, same weight as the art's outline.
+  const black=new THREE.MeshBasicMaterial({ color:0x000000 });
+  const grayMat=new THREE.MeshBasicMaterial({ color:new THREE.Color(state.edge) });
+  const band=(depth,z0,mat)=>{
+    const g=new THREE.ExtrudeGeometry(shape,{ depth, bevelEnabled:false, curveSegments:8 });
+    g.translate(0,0,z0);
+    const m=new THREE.Mesh(g, mat); m.scale.set(fx,fy,1); pill.add(m);
+  };
+  band(ow, dz/2, black);      // front black lip   [ dz/2 .. d/2 ]
+  band(dz, -dz/2, grayMat);   // gray peel middle  [-dz/2 .. dz/2 ]
+  band(ow, -d/2, black);      // back black lip    [-d/2 .. -dz/2 ]
+  // FRONT — image pasted exactly, unlit, on the front cap
+  if(view==='full'||view==='front'){
+    const fMesh=new THREE.Mesh(new THREE.PlaneGeometry(W,H),
+      new THREE.MeshBasicMaterial({ map:cropTexture(faceD,fb), transparent:true, alphaTest:AT }));
+    fMesh.position.z=d/2+eps; pill.add(fMesh);
+  }
+  // BACK — the DRAWN back art (back_new), pasted exactly, unlit, on the back cap
+  if(view==='full'||view==='back'){
+    const back=IMG.back, bb=BBOX.back, backD=dfrOf(back);
+    const bMat=(back&&bb) ? new THREE.MeshBasicMaterial({ map:cropTexture(backD,bb), transparent:true, alphaTest:AT })
+                          : new THREE.MeshBasicMaterial({ color:new THREE.Color(state.edge) });
+    const bMesh=new THREE.Mesh(new THREE.PlaneGeometry(W,H), bMat);
+    bMesh.position.z=-(d/2+eps); bMesh.rotation.y=Math.PI; bMesh.position.y=state.backDy*H; pill.add(bMesh);
+  }
+  scene.add(pill);
+  builtFor={ kind, ...paramKey() };
+  return aspect;
+}
+function paramKey(){ return { thick:state.thick, bevel:state.bevel, fov:state.fov, edge:state.edge, autoEdge:state.autoEdge, backDy:state.backDy,
+  hImg:IMG.happy, aImg:IMG.angry, bImg:IMG.back }; }
+function ensurePill(kind){ const pk=paramKey();
+  if(!pill||!builtFor||builtFor.kind!==kind||Object.keys(pk).some(k=>builtFor[k]!==pk[k])) buildPill(kind); }
+
+let aspect=0.7;
+function sizeView(){
+  const f=IMG.happy||IMG.angry; aspect=(f&&BBOX.happy)?BBOX.happy.w/BBOX.happy.h:0.7;
+  dispH=Math.min(540, window.innerHeight-220); dispW=Math.round(dispH*aspect);
+  viewCv.style.width=dispW+'px'; viewCv.style.height=dispH+'px';
+}
+function render(){
+  if(!renderer||!dispW) return;
+  amb.intensity=state.amb; key.intensity=state.key; key.position.x=state.lx;
+  ensurePill(state.kind);
+  const dpr=window.devicePixelRatio||1;
+  compose2D(viewCtx, state.kind, state.angle, Math.round(dispW*dpr), Math.round(dispH*dpr));
+  viewCv.style.width=dispW+'px'; viewCv.style.height=dispH+'px';
+  const step=180/(state.frames-1), idx=Math.round(state.angle/step);
+  $('readout').textContent=`${Math.round(state.angle)}° · frame ${String(idx).padStart(3,'0')}`;
+  drawRawCut();
+}
+
+// ---- export ----
+function frameAngles(){ const step=180/(state.frames-1); return Array.from({length:state.frames},(_,i)=>({i,ang:i*step})); }
+const _bakeCanvas=document.createElement('canvas'), _bakeCtx=_bakeCanvas.getContext('2d');
+function renderToBlob(kind, ang, outW, outH){
+  ensurePill(kind); compose2D(_bakeCtx, kind, ang, outW, outH);
+  return new Promise(r=>_bakeCanvas.toBlob(r,'image/png'));
+}
+function dl(blob,name){ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+async function exportAll(){
+  if(!IMG.happy && !IMG.angry){ $('status').textContent='No front art loaded.'; return; }
+  $('exportAll').disabled=true;
+  const outH = (IMG.happy||IMG.angry).naturalHeight;
+  let dir=null;
+  if(window.showDirectoryPicker){ try{ dir=await showDirectoryPicker({mode:'readwrite'}); }
+    catch(e){ if(e.name==='AbortError'){ $('exportAll').disabled=false; $('status').textContent='Cancelled.'; return; } } }
+  const jobs=[['happy','yellow'],['angry','red']].filter(([k])=>IMG[k]);
+  const angles=frameAngles(); let done=0, total=jobs.length*angles.length;
+  try{
+    for(const [kind,label] of jobs){
+      const asp = BBOX[kind].w/BBOX[kind].h, outW=Math.round(outH*asp);
+      for(const {i,ang} of angles){
+        const blob=await renderToBlob(kind, ang, outW, outH);
+        const name=`${label}_${String(i).padStart(3,'0')}.png`;
+        if(dir){ const fh=await dir.getFileHandle(name,{create:true}); const w=await fh.createWritable(); await w.write(blob); await w.close(); }
+        else { dl(blob,name); await sleep(80); }
+        done++; $('status').textContent=`${done}/${total} — ${name}`;
+      }
+    }
+    $('status').textContent=`Done — ${done} frames written.`+(dir?'':' (see Downloads)');
+  }catch(e){ $('status').textContent='Error: '+e.message; }
+  sizeView(); render(); $('exportAll').disabled=false;
+}
+async function exportOne(){
+  const step=180/(state.frames-1), idx=Math.round(state.angle/step);
+  const outH=(IMG[state.kind]||IMG.happy).naturalHeight, asp=(BBOX[state.kind]||BBOX.happy);
+  const blob=await renderToBlob(state.kind, idx*step, Math.round(outH*asp.w/asp.h), outH);
+  dl(blob, `${state.kind==='angry'?'red':'yellow'}_${String(idx).padStart(3,'0')}.png`);
+  sizeView(); render();
+}
+
+// ---- loading ----
+function loadImg(src){ return new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=src; }); }
+function setImg(k,img){ IMG[k]=img; const a=analyze(img); BBOX[k]=a.bbox; BBOX[k].edge=a.edge;
+  if(k!=='back' && state.autoEdge && k===state.kind) $('cEdge').value=a.edge; }
+function markName(k,t){ ({happy:'nHappy',angry:'nAngry',back:'nBack'}); $({happy:'nHappy',angry:'nAngry',back:'nBack'}[k]).textContent=t; }
+async function autoLoad(){
+  for(const k of ['happy','angry','back']){
+    try{ setImg(k, await loadImg(SRC[k])); markName(k, SRC[k].split('/').pop()+' (auto)'); }
+    catch(e){ markName(k,'— not found, load manually'); }
+  }
+  sizeView(); render(); buildStrip();
+}
+
+// ---- filmstrip: every drawn frame, click one to scrub to it and tweak ----
+let stripT=null;
+function scheduleStrip(){ clearTimeout(stripT); stripT=setTimeout(buildStrip, 250); }
+function buildStrip(){
+  const strip=$('strip'); if(!strip||!renderer) return;
+  const F=state.frames, asp=BBOX[state.kind]||BBOX.happy; if(!asp) return;
+  const thumbH=80, w=Math.max(1,Math.round(thumbH*asp.w/asp.h)), step=180/(F-1);
+  strip.innerHTML='';
+  for(let i=0;i<F;i++){
+    ensurePill(state.kind); compose2D(_bakeCtx, state.kind, i*step, w, thumbH);
+    const url=_bakeCanvas.toDataURL('image/png');
+    const cell=document.createElement('div'); cell.className='cell';
+    const im=document.createElement('img'); im.src=url;
+    const lab=document.createElement('span'); lab.textContent=`${String(i).padStart(3,'0')} · ${Math.round(i*step)}°`;
+    cell.appendChild(im); cell.appendChild(lab);
+    cell.onclick=()=>{ state.angle=i*step; $('angle').value=state.angle; sizeView(); render();
+      [...strip.children].forEach((c,k)=>c.classList.toggle('sel',k===i)); };
+    strip.appendChild(cell);
+  }
+  sizeView(); render();
+}
+
+// ---- wiring ----
+$('angle').oninput=e=>{ state.angle=+e.target.value; render(); };
+let dir=1,last=0,rafId=null;
+function loop(t){ if(!state.playing) return; if(!last)last=t;
+  const dt=Math.min(0.05,(t-last)/1000); last=t;
+  state.angle+=dir*100*dt;
+  if(state.angle>=180){ state.angle=180; dir=-1; } if(state.angle<=0){ state.angle=0; dir=1; }
+  $('angle').value=state.angle; render(); rafId=requestAnimationFrame(loop); }
+$('play').onclick=()=>{ state.playing=!state.playing; $('play').textContent=state.playing?'❚❚':'▶';
+  if(state.playing){ last=0; rafId=requestAnimationFrame(loop); } };
+
+function pickKind(k){ state.kind=k; $('tabHappy').classList.toggle('on',k==='happy'); $('tabAngry').classList.toggle('on',k==='angry');
+  if(state.autoEdge && BBOX[k]) $('cEdge').value=BBOX[k].edge; render(); buildStrip(); }
+$('tabHappy').onclick=()=>pickKind('happy'); $('tabAngry').onclick=()=>pickKind('angry');
+
+function hookFile(id,key,nameId){ $(id).onchange=e=>{ const f=e.target.files[0]; if(!f)return;
+  const im=new Image(); im.onload=()=>{ setImg(key,im); sizeView(); render(); }; im.src=URL.createObjectURL(f);
+  $(nameId).textContent=f.name+' ✓'; }; }
+hookFile('fHappy','happy','nHappy'); hookFile('fAngry','angry','nAngry'); hookFile('fBack','back','nBack');
+
+function bindSlider(id,valId,key,fmt){ const el=$(id); el.oninput=()=>{ state[key]=+el.value; $(valId).textContent=fmt?fmt(+el.value):el.value; render(); scheduleStrip(); }; }
+bindSlider('cThick','vThick','thick',v=>v.toFixed(2));
+bindSlider('cBevel','vBevel','bevel',v=>v.toFixed(2));
+bindSlider('cFov','vFov','fov',v=>String(v));
+bindSlider('cKey','vKey','key',v=>v.toFixed(2));
+bindSlider('cAmb','vAmb','amb',v=>v.toFixed(2));
+bindSlider('cLx','vLx','lx',v=>v.toFixed(1));
+bindSlider('cFrames','vFrames','frames');
+bindSlider('cBackDy','vBackDy','backDy',v=>v.toFixed(2));
+$('cEdge').oninput=e=>{ state.edge=e.target.value; state.autoEdge=false; $('cAutoEdge').checked=false; render(); scheduleStrip(); };
+$('cAutoEdge').onchange=e=>{ state.autoEdge=e.target.checked; if(state.autoEdge&&BBOX[state.kind]) $('cEdge').value=BBOX[state.kind].edge; render(); scheduleStrip(); };
+$('exportAll').onclick=exportAll; $('exportOne').onclick=exportOne;
+window.addEventListener('resize',()=>{ sizeView(); render(); });
+
+try{ initGL(); autoLoad(); }
+catch(e){ $('err').textContent='WebGL init failed: '+e.message; }
+window.__ready=()=>!!(renderer && IMG.happy);
+// headless bake hook: render kind/frame at output resolution, return a PNG dataURL
+// Headless bake hook — same compose2D path as the display, so the baked frames are
+// exactly what the generator shows: frame 000 = the raw cut, turn frames = capped 3D.
+window.__bake=(kind,idx,outH)=>{ const asp=(BBOX[kind]||BBOX.happy); if(!asp) return null;
+  const outW=Math.round(outH*asp.w/asp.h); const step=180/(state.frames-1), ang=idx*step;
+  ensurePill(kind); compose2D(_bakeCtx, kind, ang, outW, outH);
+  return _bakeCanvas.toDataURL('image/png'); };
+window.__frames=()=>state.frames;
+window.__setView=(v)=>{ state.view=v; buildPill(state.kind); sizeView(); render(); };
+</script>
+</body>
+</html>
