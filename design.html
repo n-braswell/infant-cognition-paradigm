@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Logic and Learning</title>
-<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="icon" type="image/png" href="favicon.png">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   /* html is the actual scroll container, so the snap lives here (not body,
@@ -96,33 +96,83 @@
   @media (prefers-reduced-motion: reduce) { .scroll-cue { animation: none; } }
 
   /* ----------------------------------------------------------------
-     Lottery-mode selector — small segmented control floating at the
-     top-center of the first page. Absolutely positioned so it never
-     pushes any other element. Switches ONLY which animation plays in
-     the modal (Spinning = original orbit; Random = bouncing draw).
+     Export All Movies button — bottom-left of the first page.
   ---------------------------------------------------------------- */
-  .mode-toggle {
+  .export-btn {
     position: absolute;
-    top: 14px; left: 50%;
-    transform: translateX(-50%);
-    z-index: 20;
-    display: flex; gap: 4px; align-items: center;
-    padding: 4px;
+    left: 28px; bottom: 22px;
+    display: flex; align-items: center; gap: 7px;
+    padding: 8px 16px 8px 13px;
     background: rgba(255,255,255,0.62);
     border: 1px solid #C5B9A8;
     border-radius: 999px;
     box-shadow: 0 1px 5px rgba(0,0,0,0.07);
     backdrop-filter: blur(3px);
-    font: 600 13px/1 "Helvetica Neue", Helvetica, sans-serif;
-  }
-  .mode-toggle button {
-    border: none; background: none; cursor: pointer;
+    font: 700 12px/1 "Helvetica Neue", Helvetica, sans-serif;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
     color: #6b5f50;
-    padding: 6px 15px; border-radius: 999px;
-    transition: background .15s, color .15s;
+    cursor: pointer;
+    transition: background .15s, color .15s, transform .1s;
+    z-index: 20;
   }
-  .mode-toggle button.active { background: #6b5f50; color: #fff; }
-  .mode-toggle button:not(.active):hover { background: rgba(107,95,80,0.12); }
+  .export-btn:hover:not(:disabled) { background: #fff; }
+  .export-btn:active:not(:disabled) { transform: scale(0.97); }
+  .export-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .export-btn svg {
+    width: 15px; height: 15px;
+    fill: none; stroke: currentColor; stroke-width: 2.2;
+    stroke-linecap: round; stroke-linejoin: round;
+    flex-shrink: 0;
+  }
+
+  /* Export progress overlay */
+  .export-overlay {
+    position: fixed; inset: 0;
+    background: rgba(20,18,14,0.70);
+    display: none;
+    align-items: center; justify-content: center;
+    z-index: 3000;
+    backdrop-filter: blur(5px);
+  }
+  .export-overlay.open { display: flex; }
+  .export-card {
+    background: #F5F0E8;
+    border-radius: 20px;
+    padding: 40px 48px;
+    min-width: 360px;
+    max-width: 480px;
+    box-shadow: 0 12px 48px rgba(0,0,0,0.26);
+    display: flex; flex-direction: column; gap: 18px;
+    align-items: center;
+    text-align: center;
+    font-family: "Helvetica Neue", Helvetica, sans-serif;
+  }
+  .export-card-title {
+    font-size: 13px; font-weight: 900; letter-spacing: 0.16em; text-transform: uppercase;
+    color: #5a4f44; margin: 0;
+  }
+  .export-movie-label {
+    font-size: 15px; font-weight: 700; color: #3d3428; line-height: 1.35;
+    min-height: 2.6em;
+  }
+  .export-counter {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+    color: #9a8e80;
+  }
+  .export-progress-track {
+    width: 280px; height: 6px;
+    background: #DDD7CC; border-radius: 99px; overflow: hidden;
+  }
+  .export-progress-fill {
+    height: 100%; background: #6b5f50; border-radius: 99px;
+    width: 0%;
+    transition: width 0.4s ease;
+  }
+  .export-note {
+    font-size: 11px; color: #9a8e80; letter-spacing: 0.03em; line-height: 1.55;
+    max-width: 320px;
+  }
 
   /* ----------------------------------------------------------------
      Page header (currently just the hidden picker, room for more).
@@ -327,7 +377,7 @@
   ---------------------------------------------------------------- */
   .phase-grid {
     display: grid;
-    grid-template-columns: 5.6fr 0.7fr 3.7fr;
+    grid-template-columns: 2.0fr 0.6fr 5.0fr 0.6fr 3.0fr;
     gap: 0;
     width: 100%;
     /* Content-height so the parent can vertically center it on the page. */
@@ -345,8 +395,15 @@
     flex-direction: column;
     gap: clamp(4px, 1.2vh, 12px);
   }
+  .phase-swath.fam   { --swath-fg: #5C4A8C; }
   .phase-swath.train { --swath-fg: #5a4f3f; }
   .phase-swath.test  { --swath-fg: #4a4a42; }
+  /* Familiarization strip: only 3 demo movies, reusing the test-side
+     single-dashed-box layout (test-row / test-content / mini-strip). */
+  #fam-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .mini-thumb.k-trial0 { --mini-stroke: #5C4A8C; }
+  .mini-thumb.k-trial1 { --mini-stroke: #C9A000; }
+  .mini-thumb.k-trial2 { --mini-stroke: #C03028; }
   .phase-label {
     font-size: 22px;
     font-weight: 800;
@@ -387,6 +444,8 @@
     flex-direction: row;
     align-items: stretch;
     gap: 14px;
+    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
   }
   .train-code {
     flex: 0 0 auto;
@@ -437,6 +496,17 @@
     min-height: 0;
     overflow: hidden;
   }
+  /* Clickable train/test thumbnails — hover shows a play triangle. */
+  .mini-thumb[data-play] { cursor: pointer; position: relative; transition: transform .08s, box-shadow .12s; }
+  .mini-thumb[data-play]:hover { transform: scale(1.05); box-shadow: 0 4px 13px rgba(0,0,0,0.16); z-index: 3; }
+  .mini-thumb[data-play]::before {
+    content: ""; position: absolute; top: 50%; left: 50%;
+    transform: translate(-38%, -50%); width: 0; height: 0; border-style: solid;
+    border-width: 9px 0 9px 15px; border-color: transparent transparent transparent #fff;
+    opacity: 0; transition: opacity .12s; z-index: 4; pointer-events: none;
+    filter: drop-shadow(0 0 3px rgba(0,0,0,.65));
+  }
+  .mini-thumb[data-play]:hover::before { opacity: .95; }
   .mini-thumb svg {
     display: block;
     width: 100%;
@@ -545,21 +615,27 @@
   .design-header {
     display: flex;
     flex-direction: column;
-    gap: 14px;
-    margin-bottom: clamp(6px, 1.5vh, 24px);
+    gap: 18px;
+    margin-bottom: clamp(10px, 2vh, 30px);
   }
   .design-title-row {
     display: flex;
     align-items: center;
-    gap: 24px;
+    justify-content: center;
+    gap: 32px;
+    flex-wrap: wrap;
   }
   .design-cb-wrap {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 7px;
+    background: rgba(255,255,255,0.55);
+    border: 1.5px solid rgba(120,110,95,0.32);
+    border-radius: 13px;
+    padding: 9px 16px;
   }
   .design-heading {
-    font-size: 26px;
+    font-size: 32px;
     font-weight: 800;
     letter-spacing: 0.10em;
     text-transform: uppercase;
@@ -577,17 +653,17 @@
     gap: 10px;
   }
   .cb-label {
-    font-size: 10px;
+    font-size: 10.5px;
     font-weight: 800;
-    letter-spacing: 0.13em;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
     color: #8a7f72;
     white-space: nowrap;
   }
   .cb-section-label {
-    font-size: 9.5px;
+    font-size: 10.5px;
     font-weight: 800;
-    letter-spacing: 0.13em;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
     color: #8a7f72;
   }
@@ -602,11 +678,11 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 800;
-    letter-spacing: 0.09em;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
-    padding: 7px 14px;
+    padding: 7px 15px;
     border: none;
     background: transparent;
     color: #8a7f72;
@@ -623,21 +699,54 @@
     color: #5a4f44;
   }
   .cb-dot {
-    width: 9px; height: 9px;
+    width: 10px; height: 10px;
     border-radius: 50%;
     display: inline-block;
     flex-shrink: 0;
   }
   .cb-seq {
     display: flex;
-    gap: 3px;
+    gap: 4px;
     align-items: center;
   }
   .cb-seq-dot {
-    width: 7px; height: 7px;
+    width: 8px; height: 8px;
     border-radius: 50%;
     display: inline-block;
     flex-shrink: 0;
+  }
+  /* Presentation toggle — page 1 (Event types), top of the section. This is
+     the FIRST decision made ("which movies do we see at all?"), so it reads
+     bigger/bolder than the in-page counterbalance controls further down. */
+  .presentation-bar {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+    margin-bottom: clamp(10px, 2vh, 26px);
+    padding: 16px 28px;
+    background: rgba(255,255,255,0.55);
+    border: 1.5px solid rgba(120,110,95,0.32);
+    border-radius: 16px;
+    align-self: flex-start;
+  }
+  .presentation-label {
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #6b5f50;
+    white-space: nowrap;
+  }
+  .cb-toggle-lg .cb-btn {
+    font-size: 17px;
+    padding: 13px 26px;
+  }
+  .presentation-hint {
+    font-size: 13px;
+    color: #8a7f72;
+    max-width: 360px;
+    line-height: 1.4;
   }
   @keyframes thumb-flip {
     0%   { transform: scaleX(1); }
@@ -683,28 +792,10 @@
   </div>
 </div>
 
-<div class="section events-section">
-  <div class="mode-toggle" id="mode-toggle" role="group" aria-label="Lottery mode">
-    <button type="button" data-mode="spin" class="active">Spinning Lottery</button>
-    <button type="button" data-mode="occlusion">Occlusion</button>
-  </div>
-  <span class="side-label">Event types</span>
-  <div class="section-content">
-    <div class="trial-grid" id="trial-grid"></div>
-  </div>
-  <button class="scroll-cue" aria-label="Scroll to storyboard"
-          onclick="document.querySelector('.design-section').scrollIntoView({behavior:'smooth'})">
-    <svg viewBox="0 0 24 24"><path d="M5 9l7 7 7-7"/></svg>
-  </button>
-</div>
-
-<div class="section-divider"></div>
-
 <div class="section design-section">
   <div class="section-content">
     <div class="design-header">
       <div class="design-title-row">
-        <span class="design-heading">Design</span>
         <div class="design-cb-wrap">
           <span class="cb-section-label">Counterbalanced Factors</span>
           <div class="cb-bar" id="cb-bar">
@@ -727,6 +818,20 @@
       </div>
     </div>
     <div class="phase-grid">
+      <section class="phase-swath fam">
+        <span class="phase-label">Familiarize</span>
+        <div class="test-row">
+          <div class="test-content">
+            <div class="mini-strip" id="fam-strip"></div>
+          </div>
+        </div>
+      </section>
+      <div class="converge">
+        <div class="converge-spacer"></div>
+        <div class="converge-svg-wrap">
+          <svg class="converge-svg" id="diverge-svg" preserveAspectRatio="none"></svg>
+        </div>
+      </div>
       <section class="phase-swath train">
         <span class="phase-label">Train</span>
         <div class="train-row" id="train-row"></div>
@@ -747,9 +852,51 @@
       </section>
     </div>
   </div>
+  <button class="scroll-cue" aria-label="Scroll to event types"
+          onclick="document.querySelector('.events-section').scrollIntoView({behavior:'smooth'})">
+    <svg viewBox="0 0 24 24"><path d="M5 9l7 7 7-7"/></svg>
+  </button>
+
+  <button class="export-btn" id="export-all-btn" title="Export all condition movies (Classic, Occlusion + Sequential) as MP4 files">
+    <svg viewBox="0 0 16 16"><line x1="8" y1="1" x2="8" y2="10"/><polyline points="4,7 8,11 12,7"/><rect x="2" y="13" width="12" height="1.8" rx="0.9"/></svg>
+    Export All Movies
+  </button>
+</div>
+
+<div class="section-divider"></div>
+
+<div class="section events-section">
+  <span class="side-label">Event types</span>
+  <div class="section-content">
+    <div class="presentation-bar">
+      <span class="presentation-label">Presentation</span>
+      <div class="cb-toggle cb-toggle-lg" id="mode-toggle">
+        <button class="cb-btn" data-mode="spin" title="The original single spinning-lottery movie — no familiarization">Classic</button>
+        <button class="cb-btn active" data-mode="seq" title="Familiarization demos, then Train + Test movies — assumed everywhere below">Sequential</button>
+      </div>
+      <span class="presentation-hint">Determines every movie shown below — Familiarize → Train → Test (Sequential), or the single spinning-lottery clip (Classic).</span>
+    </div>
+    <div class="trial-grid" id="trial-grid"></div>
+  </div>
+</div>
+
+<!-- Export progress overlay -->
+<div class="export-overlay" id="export-overlay" role="dialog" aria-live="polite" aria-label="Export progress">
+  <div class="export-card">
+    <div class="export-card-title">Exporting Movies</div>
+    <div class="export-counter" id="export-counter">1 of 8</div>
+    <div class="export-movie-label" id="export-movie-label">Preparing…</div>
+    <div class="export-progress-track">
+      <div class="export-progress-fill" id="export-progress-fill"></div>
+    </div>
+    <div class="export-note" id="export-note">
+      Files download automatically when each recording finishes.<br>Keep this tab active throughout.
+    </div>
+  </div>
 </div>
 
 <script>window.LOTTERY_ASSET_BASE = '';</script>  <!-- this page is at the repo root, not one folder deep -->
+<script src="https://cdn.jsdelivr.net/npm/mp4-muxer@5/build/mp4-muxer.min.js"></script>
 <script src="_shared/lottery.js?v=17"></script>
 <script>
 const { tightSceneSVG: sceneSVG, sceneSVG: rawSceneSVG,
@@ -931,20 +1078,24 @@ function mergedTrainState(key) {
     fireworks: 0, probs: null };
 }
 function trainThumbHTML(key) {
-  return `<div class="mini-thumb k-${key}">${rawSceneSVG(mergedTrainState(key), machineVB())}</div>`;
+  return `<div class="mini-thumb k-${key}" data-play="${key}" title="Play this trial">${rawSceneSVG(mergedTrainState(key), machineVB())}</div>`;
 }
 function trainThumbHTMLKeyFrame(key) {
   const state = mergedTrainState(key);
   const infrequentKind = swapKind(frequentKind);
   const overridden = { ...state, revealedPill: infrequentKind, coverRevealedPill: false };
-  return `<div class="mini-thumb k-${key} key-frame">${rawSceneSVG(overridden, machineVB())}</div>`;
+  return `<div class="mini-thumb k-${key} key-frame" data-play="${key}" title="Play this trial (oddball)">${rawSceneSVG(overridden, machineVB())}</div>`;
 }
 function renderTrainGroups() {
   const root = document.getElementById('train-row');
   root.innerHTML = TRAIN_GROUPS.map(group => {
-    const trials = Array.from({ length: TRAIN_TRIAL_COUNT }, (_, i) => {
-      const key = group.pattern[i % group.pattern.length];
-      return i === 2 ? trainThumbHTMLKeyFrame(key) : trainThumbHTML(key);
+    // The oddball (infrequent-colour keyframe) sits at trial POSITION 2 (index 1).
+    // Position 1 is a standard frequent trial; from position 3 on, the group's
+    // characteristic pattern alternates. E2 (['visual','supports']) →
+    //   yellow · RED(oddball) · deductive · yellow · deductive · yellow · deductive · yellow
+    const trials = Array.from({ length: trialCount }, (_, i) => {
+      const key = i === 0 ? group.pattern[0] : group.pattern[(i - 1) % group.pattern.length];
+      return i === 1 ? trainThumbHTMLKeyFrame(key) : trainThumbHTML(key);
     }).join('');
     return `
       <div class="train-sub">
@@ -977,11 +1128,50 @@ function testState(revealedKind) {
 }
 function testThumbHTML(revealedKind) {
   const cls = revealedKind === 'happy' ? 'k-test-happy' : 'k-test-angry';
-  return `<div class="mini-thumb ${cls}">${sceneSVG(testState(revealedKind))}</div>`;
+  return `<div class="mini-thumb ${cls}" data-play="visual" title="Play this test trial">${sceneSVG(testState(revealedKind))}</div>`;
 }
 function renderTestStrip() {
   const strip = document.getElementById('test-strip');
   strip.innerHTML = currentTestPattern().map(testThumbHTML).join('');
+}
+
+// ====================================================================
+// FAMILIARIZATION strip — the same 3 demo movies for every experiment
+// (not counterbalanced, not per-condition): the intro turn-around demo,
+// then a yellow-wins and a red-wins trial. Static thumbnails are a
+// snapshot of the SAME seq engine that drives the live modal (below),
+// referenced by function name only — the engine block runs first at the
+// top of the page, so by the time this is actually CALLED (rerenderAll(),
+// at the bottom of the script) everything it references already exists.
+// ====================================================================
+const FAM_META = [
+  { key: 'trial0', cls: 'k-trial0', title: 'Play: Intro — the turn-around/shuffle mechanism' },
+  { key: 'trial1', cls: 'k-trial1', title: 'Play: Trial 1 — a yellow pill wins the ball' },
+  { key: 'trial2', cls: 'k-trial2', title: 'Play: Trial 2 — a red pill wins the ball' },
+];
+function famThumbState(branchKey, t) {
+  // Borrow the live modal's global mode flags just long enough to compute one
+  // static frame, then restore them — mirrors the save/restore pattern used
+  // by the MP4 exporter (encodeOneMovieMP4) for the same reason.
+  const savedBranch = currentBranch, savedTrial = seqMovieIsTrial;
+  currentBranch = branchKey;
+  seqMovieIsTrial = (branchKey === 'trial1' || branchKey === 'trial2');
+  const kf = buildKeyframesSequential(branchKey);
+  const state = computeStateSequential(kf, 0, t);
+  currentBranch = savedBranch; seqMovieIsTrial = savedTrial;
+  return state;
+}
+function famThumbHTML(meta) {
+  // trial0: mid-shuffle (backs spinning) — shows the turn-around mechanism itself.
+  // trial1/trial2: pill has just reached the goal, face visible — shows the outcome.
+  const t = meta.key === 'trial0' ? atSI('orbit', 0.5) : atST('goalHold', 0.3);
+  const state = famThumbState(meta.key, t);
+  return `<div class="mini-thumb ${meta.cls}" data-play="${meta.key}" title="${meta.title}">${rawSceneSVG(state, machineVB())}</div>`;
+}
+function renderFamStrip() {
+  const strip = document.getElementById('fam-strip');
+  if (!strip) return;
+  strip.innerHTML = FAM_META.map(famThumbHTML).join('');
 }
 
 // ====================================================================
@@ -1003,7 +1193,7 @@ function renderConvergeArrows() {
   const svg     = document.getElementById('converge-svg');
   const wrap    = svg.parentElement;
   const trainEl = document.getElementById('train-row');
-  const testEl  = document.querySelector('.test-content');
+  const testEl  = document.querySelector('.phase-swath.test .test-content');
   if (!svg || !wrap || !trainEl || !testEl) return;
 
   const wrapRect  = wrap.getBoundingClientRect();
@@ -1033,25 +1223,111 @@ function renderConvergeArrows() {
 
   // Build the SVG. Fan lines from (0, yi) → (cx, cy), then one angled
   // shaft from (cx, cy) → (W, endY) with an arrowhead.
+  // The arrowhead is an SVG <marker orient="auto">: it rotates itself to match
+  // the path's actual tangent direction at the endpoint, so it stays flush
+  // against the line at ANY angle (a hand-drawn fixed-orientation triangle,
+  // the old approach, only looks right on a perfectly horizontal line).
   const stroke = '#8a7570';
   const sw = 2;
+  const defs = arrowMarkerDefs('arrowhead-converge', stroke);
   const lines = startYs.map(y =>
     `<path d="M 0 ${y} L ${cx} ${cy}" stroke="${stroke}" stroke-width="${sw}" fill="none" stroke-linecap="round" stroke-linejoin="round" />`
   ).join('');
-  // Single segment to the test thumb, angled toward endY, with arrowhead.
-  const shaft = `<path d="M ${cx} ${cy} L ${W - 10} ${endY}"
-    stroke="${stroke}" stroke-width="${sw}" fill="none" stroke-linecap="round" stroke-linejoin="round" />`;
-  const head = `<polygon points="${W},${endY} ${W - 10},${endY - 7}
-    ${W - 10},${endY + 7}" fill="${stroke}" />`;
+  // Single segment to the test thumb, angled toward endY, with an
+  // auto-oriented arrowhead marker at its end.
+  const shaft = `<path d="M ${cx} ${cy} L ${W} ${endY}"
+    stroke="${stroke}" stroke-width="${sw}" fill="none" stroke-linecap="round" stroke-linejoin="round"
+    marker-end="url(#arrowhead-converge)" />`;
 
-  svg.innerHTML = lines + shaft + head;
+  svg.innerHTML = defs + lines + shaft;
 }
+
+// Shared <marker> def for a triangular arrowhead that self-rotates to match
+// each path's direction (orient="auto") — used by both converge and diverge
+// diagrams so every arrowhead sits flush against its line at any angle.
+function arrowMarkerDefs(id, fill) {
+  return `<defs><marker id="${id}" viewBox="0 0 10 10" refX="8.5" refY="5"
+    markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto">
+    <path d="M 0 0.5 L 9 5 L 0 9.5 Z" fill="${fill}" />
+  </marker></defs>`;
+}
+
+// Mirror of renderConvergeArrows: ONE source (the Familiarize box) fans OUT to
+// the FOUR train rows — same geometry, reversed direction and arrowheads.
+function renderDivergeArrows() {
+  const svg     = document.getElementById('diverge-svg');
+  const wrap    = svg.parentElement;
+  const trainEl = document.getElementById('train-row');
+  const famEl   = document.querySelector('.phase-swath.fam .test-content');
+  if (!svg || !wrap || !trainEl || !famEl) return;
+
+  const wrapRect  = wrap.getBoundingClientRect();
+  const trainSubs = trainEl.querySelectorAll('.train-sub');
+  if (!trainSubs.length || wrapRect.width === 0 || wrapRect.height === 0) return;
+
+  const W = wrapRect.width;
+  const H = wrapRect.height;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+  // Familiarize box vertical center — the single SOURCE, on the left edge.
+  const famRect = famEl.getBoundingClientRect();
+  const startY = (famRect.top + famRect.height / 2) - wrapRect.top;
+
+  // Vertical centers of each train row — the four TARGETS, on the right edge.
+  const endYs = Array.from(trainSubs).map(sub => {
+    const r = sub.getBoundingClientRect();
+    return (r.top + r.height / 2) - wrapRect.top;
+  });
+
+  // Divergence point — mirrors the convergence point (true horizontal center,
+  // vertical midpoint of the 4 train rows).
+  const cx = W * 0.5;
+  const cy = (endYs[0] + endYs[endYs.length - 1]) / 2;
+
+  const stroke = '#8a7570';
+  const sw = 2;
+  const defs = arrowMarkerDefs('arrowhead-diverge', stroke);
+  // One angled shaft in from the Familiarize box to the divergence point…
+  const shaft = `<path d="M 0 ${startY} L ${cx} ${cy}"
+    stroke="${stroke}" stroke-width="${sw}" fill="none" stroke-linecap="round" stroke-linejoin="round" />`;
+  // …then fan lines OUT to each of the four train rows, each with its own
+  // auto-oriented arrowhead marker (see arrowMarkerDefs — self-rotates to
+  // match each line's individual angle, unlike a fixed-orientation triangle).
+  const lines = endYs.map(y =>
+    `<path d="M ${cx} ${cy} L ${W} ${y}" stroke="${stroke}" stroke-width="${sw}" fill="none" stroke-linecap="round" stroke-linejoin="round"
+    marker-end="url(#arrowhead-diverge)" />`
+  ).join('');
+
+  svg.innerHTML = defs + shaft + lines;
+}
+
+// Both diagrams always redraw together — every existing call site that
+// re-renders the converge arrows (resize, trial-count toggle, etc.) needs the
+// diverge arrows kept in sync too, since both depend on the train row layout.
+function renderArrowDiagrams() { renderConvergeArrows(); renderDivergeArrows(); }
 
 // Render on load + on resize. Also re-run after a tick to make sure
 // layout has settled (mini-thumbs SVGs can shift heights slightly).
-window.addEventListener('load',   renderConvergeArrows);
-window.addEventListener('resize', renderConvergeArrows);
-requestAnimationFrame(() => requestAnimationFrame(renderConvergeArrows));
+window.addEventListener('load',   renderArrowDiagrams);
+window.addEventListener('resize', renderArrowDiagrams);
+requestAnimationFrame(() => requestAnimationFrame(renderArrowDiagrams));
+
+// ResizeObserver on the three boxes the arrows actually measure (fam box,
+// train rows, test box) — self-heals the diagram whenever any of them
+// change size for ANY reason (font metrics settling, zoom, a re-render),
+// instead of relying on 'load'/'resize' alone catching every case.
+function observeArrowTargets() {
+  if (!window.ResizeObserver) return;
+  const targets = [
+    document.getElementById('train-row'),
+    document.querySelector('.phase-swath.fam .test-content'),
+    document.querySelector('.phase-swath.test .test-content'),
+  ].filter(Boolean);
+  if (!targets.length) return;
+  const ro = new ResizeObserver(() => renderArrowDiagrams());
+  targets.forEach(t => ro.observe(t));
+}
+requestAnimationFrame(observeArrowTargets);
 
 // ====================================================================
 // VISUAL EVENT ANIMATION (modal) — CANVAS ENGINE
@@ -1072,29 +1348,37 @@ const {
 // 1) DECLARATIVE TIMELINE — named segments with RELATIVE durations.
 // ===================================================================
 const TIMELINE = [
+  { name: 'loadPause',   dur: 1.00 },  // still hold before animation begins
   { name: 'introSettle', dur: 0.30 },  // pills shown face-up
   { name: 'yellowDance', dur: 1.90 },  // happy wiggle + spin (seq_happy plays from here)
   { name: 'yellowJump',  dur: 1.00 },  // big jump on the "yay" (vocal lands at seq 1.9s = here)
-  { name: 'beat',        dur: 0.25 },
+  { name: 'beat',        dur: 1.10 },
   { name: 'redDance',    dur: 1.90 },  // stiff agitated stomp (seq_angry plays from here)
   { name: 'redShake',    dur: 1.00 },  // head-shake "no" on the male exclamation (vocal at seq 1.9s = here)
   { name: 'dancesDone',  dur: 0.15 },
   { name: 'premixPause', dur: 0.55 },
   { name: 'flySquare',   dur: 1.50 },  // fly from the dance row into the diamond formation (facing)
-  { name: 'turn',        dur: 1.275 }, // slow, deliberate 3D turnaround in place at the formation
+  { name: 'turn',        dur: 0.50 },  // slow, deliberate 3D turnaround in place at the formation
   { name: 'postFlip',   dur: 1.00 },  // hold after flip completes, before orbit begins
   { name: 'orbit',       dur: 3.60 },  // then orbit the circle clockwise (already backs)
   { name: 'settle',      dur: 0.47 },  // brief hold (chosen pill at bottom) after the orbit
-  // The chosen pill drops into the tube FIRST (slide whistle) and just SITS at the
-  // bottom — no vibration yet. Only AFTER it lands does the deduction reveal play;
-  // a split second after that, the vibration begins.
-  { name: 'exit',        dur: 0.80 },  // the chosen pill starts its slide-whistle drop
-  { name: 'descent',     dur: 1.40 },  // continues down to the bottom of the tube
-  { name: 'tubeHold',    dur: 0.45 },  // pill rests at the bottom (silhouette), no vibration
-  { name: 'dedSettle',   dur: 1.20 },  // pause BEFORE the reveal turn (pill waiting in the tube)
-  { name: 'reveal',      dur: 0.60 },  // deduction pills rotate face-out
+  // FIRST the irrelevant arena pill crumbles (all 4 backs still in the arena),
+  // THEN the chosen pill drops into the tube. This way the tube entry happens
+  // AFTER the non-deduction pill is already gone.
+  { name: 'crumblePause', dur: 1.60 },  // still hold after orbit (all 4 backs in arena)
+  { name: 'crumble',      dur: 1.00 },  // irrelevant pill disintegrates — dust dissipates across the whole phase (fadeRate tuned so no dead tail)
+  { name: 'postCrumble',  dur: 0.12 },  // no pause — chosen pill drops as the shatter clears
+  { name: 'exit',        dur: 0.50 },  // the chosen pill starts its slide-whistle drop (quicker)
+  { name: 'descent',     dur: 0.95 },  // continues down to the bottom of the tube (quicker)
+  { name: 'tubeHold',    dur: 0.85 },  // pill rests at the bottom (silhouette), no vibration
+  { name: 'pulse1',      dur: 0.80 },  // first brief buzz in tube (before reveal)
+  { name: 'pulsePause1', dur: 0.45 },  // silence between pulses
+  { name: 'pulse2',      dur: 0.80 },  // second brief buzz in tube
+  { name: 'pulsePause2', dur: 0.55 },  // silence before the reveal turn
+  { name: 'reveal',      dur: 0.50 },  // deduction pills rotate face-out
   { name: 'revealHold',  dur: 2.50 },  // lead delay → three synchronized pops (ding ding ding) → trail delay
-  { name: 'rehide',      dur: 0.60 },  // rotate back to hidden
+  { name: 'revealTrail', dur: 1.19 },  // extra hold after last ding, before pills turn back
+  { name: 'rehide',      dur: 0.50 },  // rotate back to hidden
   { name: 'postReveal',  dur: 1.00 },  // split-second pause AFTER they turn back, before the vibration
   { name: 'preSpit',     dur: 2.50 },  // suspense build — pill vibrates, growing (matches 2.5s vibrate)
   { name: 'spit',        dur: 0.12 },  // tube SNAPS the pill out — fast
@@ -1107,14 +1391,121 @@ const DURATION = TIMELINE.reduce((a, p) => a + p.dur, 0);
 const at = (name, frac = 0) => PH[name].t0 + frac * PH[name].dur;
 
 // ===================================================================
+// SEQUENTIAL MODE timelines (presentation = 'seq'). Two flavors:
+//   TIMELINE_SEQ        — restructured TEST movie (dance trimmed, flip BEFORE
+//                         gather, square-on-corner spin, TOP explodes, sides
+//                         reveal immediately, chosen descends, TWO-attempt door,
+//                         bursts out as a back, gets the ball, THEN flips).
+//   TIMELINE_SEQ_TRIAL  — familiarization demo (full dance kept, spin while
+//                         FULLY VISIBLE, settle into a flat 2×2, one colour
+//                         slides over the tube + descends, two-attempt door,
+//                         gets the ball with its face showing — no crumble,
+//                         no deduction reveal, no hidden identity).
+// ===================================================================
+const TIMELINE_SEQ = [
+  { name: 'loadPause',   dur: 0.60 },
+  { name: 'introSettle', dur: 0.30 },  // pills shown face-up
+  { name: 'yellowJump',  dur: 1.00 },  // "yay" leap (dance sway dropped)
+  { name: 'beat',        dur: 0.50 },
+  { name: 'redShake',    dur: 1.00 },  // "hmm" + chest-bump (red shudder dropped)
+  { name: 'dancesDone',  dur: 0.20 },
+  { name: 'flip',        dur: 0.60 },  // flip to BACKS in place — BEFORE gathering
+  { name: 'flipHold',    dur: 0.40 },
+  { name: 'gather',      dur: 1.30 },  // fly into the square formation (as backs)
+  { name: 'orbit',       dur: 3.00 },  // spin
+  { name: 'settle',      dur: 0.45 },
+  { name: 'crumbleHold', dur: 0.30 },  // brief hold before the explosion
+  { name: 'crumble',     dur: 1.00 },  // the TOP pill explodes
+  { name: 'reveal',      dur: 0.55 },  // the two SIDE pills flip face-out — immediately
+  { name: 'revealHold',  dur: 2.30 },  // ding · ding · ding (pop pop)
+  { name: 'descend',     dur: 1.10 },  // chosen (bottom) drops to the door
+  { name: 'door1Push',   dur: 0.45 },  // attempt 1 — push, door resists
+  { name: 'door1Recoil', dur: 0.55 },  // bounce back up
+  { name: 'door2Push',   dur: 0.60 },  // attempt 2 — push through, door opens
+  { name: 'through',     dur: 0.35 },  // bursts out as a back to the ball
+  { name: 'goalHold',    dur: 0.85 },  // sits at the goal (hidden back)
+  { name: 'flipReveal',  dur: 0.55 },  // turns around + firework + chime
+  { name: 'endHold',     dur: 1.40 },
+];
+const PH_SEQ = {};
+{ let acc = 0; for (const p of TIMELINE_SEQ) { PH_SEQ[p.name] = { t0: acc, t1: acc + p.dur, dur: p.dur }; acc += p.dur; } }
+const DURATION_SEQ = TIMELINE_SEQ.reduce((a, p) => a + p.dur, 0);
+const atS = (name, frac = 0) => PH_SEQ[name].t0 + frac * PH_SEQ[name].dur;
+
+const TIMELINE_SEQ_TRIAL = [
+  { name: 'loadPause',   dur: 0.60 },
+  { name: 'introSettle', dur: 0.30 },
+  { name: 'yellowDance', dur: 1.90 },  // full dance kept for the familiarization demo
+  { name: 'yellowJump',  dur: 1.00 },
+  { name: 'beat',        dur: 1.10 },
+  { name: 'redDance',    dur: 1.90 },
+  { name: 'redShake',    dur: 1.00 },
+  { name: 'dancesDone',  dur: 0.15 },
+  { name: 'premixPause', dur: 0.55 },
+  { name: 'gather',      dur: 1.30 },  // fly into formation — FACES, no flip
+  { name: 'orbit',       dur: 3.00 },  // spin while fully visible
+  { name: 'settle',      dur: 0.70 },  // settle into a flat 2×2 (2 yellow L / 2 red R)
+  { name: 'pickPause',   dur: 0.50 },
+  { name: 'slideIn',     dur: 0.70 },  // the winning colour slides over the tube
+  { name: 'descend',     dur: 1.10 },
+  { name: 'door1Push',   dur: 0.45 },
+  { name: 'door1Recoil', dur: 0.55 },
+  { name: 'door2Push',   dur: 0.60 },
+  { name: 'through',     dur: 0.35 },
+  { name: 'goalHold',    dur: 0.70 },
+  { name: 'endHold',     dur: 1.50 },
+];
+const PH_SEQ_TRIAL = {};
+{ let acc = 0; for (const p of TIMELINE_SEQ_TRIAL) { PH_SEQ_TRIAL[p.name] = { t0: acc, t1: acc + p.dur, dur: p.dur }; acc += p.dur; } }
+const DURATION_SEQ_TRIAL = TIMELINE_SEQ_TRIAL.reduce((a, p) => a + p.dur, 0);
+const atST = (name, frac = 0) => PH_SEQ_TRIAL[name].t0 + frac * PH_SEQ_TRIAL[name].dur;
+
+// INTRO demo (trial0): four pills dance, flip to their backs, shuffle around, and
+// flip back — landing in NEW positions. Teaches the turn-around/shuffle mechanism.
+// No descent, no ball.
+const TIMELINE_SEQ_INTRO = [
+  { name: 'loadPause',   dur: 0.60 },
+  { name: 'introSettle', dur: 0.30 },
+  { name: 'yellowDance', dur: 1.90 },
+  { name: 'yellowJump',  dur: 1.00 },
+  { name: 'beat',        dur: 1.10 },
+  { name: 'redDance',    dur: 1.90 },
+  { name: 'redShake',    dur: 1.00 },
+  { name: 'dancesDone',  dur: 0.15 },
+  { name: 'premixPause', dur: 0.55 },
+  { name: 'gather',      dur: 1.30 },  // fly into the diamond (faces)
+  { name: 'flip',        dur: 0.60 },  // flip to backs, in place
+  { name: 'flipHold',    dur: 0.40 },
+  { name: 'orbit',       dur: 3.00 },  // shuffle around (as backs)
+  { name: 'settle',      dur: 0.55 },  // land in the new spots
+  { name: 'flipBack',    dur: 0.60 },  // flip back to faces — now rearranged
+  { name: 'revealHold',  dur: 1.60 },  // hold so you can see the new arrangement
+  { name: 'endHold',     dur: 1.20 },
+];
+const PH_SEQ_INTRO = {};
+{ let acc = 0; for (const p of TIMELINE_SEQ_INTRO) { PH_SEQ_INTRO[p.name] = { t0: acc, t1: acc + p.dur, dur: p.dur }; acc += p.dur; } }
+const DURATION_SEQ_INTRO = TIMELINE_SEQ_INTRO.reduce((a, p) => a + p.dur, 0);
+const atSI = (name, frac = 0) => PH_SEQ_INTRO[name].t0 + frac * PH_SEQ_INTRO[name].dur;
+// FINAL-REVEAL VARIANT — always DELAYED: pill bursts out as its hidden back
+// (pop sound only), sits at the goal ~1s, THEN turns around as the firework
+// + chime fire.
+const DELAYED_REVEAL = true;
+
+// ===================================================================
 // 2) ANIMATION KNOBS — geometry + motion params in one block.
 // ===================================================================
 const ANIM = {
-  orbit:   { radius: 95, turns: 5 },
+  orbit:   { radius: 95, turns: 5, lift: 44 },   // lift: diamond center raised so the top pill sits just under the box top
   physics: { speed: 165 },                          // px/s for float + fly-in
   exit:    { sinkY: TUBE_TOP + PILL_H * 0.35 },
   silhouette: { fill: '#33425A', outline: '#000000', lineWidth: 2.0 },
   suspense: { amp: 2.8 },                            // px peak side-to-side buzz before the spit
+  // Pixel-crumble of the non-flipping pill. tile = club size in stage px (each tile
+  // is one cohesive group of adjacent pixels sampled straight from the pill art, so
+  // its internal colours stay together). ss = supersample of the sampled source.
+  // Pixel crumble: the non-flipping pill explodes into clubs that fly off into
+  // space (velocity-damped) and fade out. Locked-in params.
+  crumble: { tile: 2.83, ss: 3, detach: 0.02, flySpeed: 550, velTau: 0.12, fadeRate: 5.5 },
 };
 
 // Per-branch config: which arena slot exits (its kind = dispensed
@@ -1137,6 +1528,7 @@ const CFG = { visual: { ...CFG_BASE.visual }, baseline: { ...CFG_BASE.baseline }
 // ---- Counterbalance state ----
 let frequentKind = 'happy';  // 'happy' = yellow frequent; 'angry' = red frequent
 let testOrderB   = false;    // false = order A, true = order B
+let trialCount   = 8;        // training trials shown per row (fixed — no 4-trial option)
 
 const TEST_PATTERN_A = ['happy', 'angry', 'angry', 'happy', 'happy', 'angry'];
 const TEST_PATTERN_B = ['angry', 'happy', 'happy', 'angry', 'angry', 'happy'];
@@ -1197,13 +1589,23 @@ function buildKeyframes(branchKey) {
   const revPillsSansExit         = dropExit(revPills);
   const revealedArenaSansExit    = dropExit(revealedArena);
   const revealedArenaPopSansExit = dropExit(revealedArenaPop);
+  // CRUMBLE: the arena slot that is neither the chosen/exit pill nor a deduction
+  // reveal pill — it disintegrates during the new pause. After the crumble it is
+  // GONE for the rest of the timeline, so every post-crumble pill set nulls it out.
+  const CRUMBLE_SLOT = [0, 1, 2, 3].find(i => i !== cfg.exitSlot && !cfg.revealSlots.includes(i));
+  const allBackNocrumble = allBack.map((p, i) => i === CRUMBLE_SLOT ? null : p);
+  const dropCrumb = arr => arr.map((p, i) => i === CRUMBLE_SLOT ? null : p);
+  const sansExitCrumb            = dropCrumb(sansExit);
+  const revPillsSansExitC        = dropCrumb(revPillsSansExit);
+  const revealedArenaSansExitC   = dropCrumb(revealedArenaSansExit);
+  const revealedArenaPopSansExitC = dropCrumb(revealedArenaPopSansExit);
   const zero = pills.map(() => ({ dx: 0, dy: 0 }));
   const base = { pills: allFace, revealedPill: null, shakeX: 0, fireworks: 0, burst: 0,
                  yellowDx: 0, yellowDy: 0, yellowScaleX: 1, yellowScaleY: 1,
                  redDx: 0, redDy: 0, redScaleX: 1, redScaleY: 1, redTilt: 0, pillOffsets: zero };
 
   const inTube = (extra = {}) => ({ ...base, pills: sansExit, revealedPill: 'silhouette',
-    tubePillY: REVEAL_CY, tubePillScaleX: 1, tubePillScaleY: 1, tubeBulge: 0, tubeTaper: 58, ...extra });
+    tubePillY: TUBE_TOP - 15, tubePillScaleX: 1, tubePillScaleY: 1, tubeBulge: 0, tubeTaper: 58, ...extra });
 
   // Exit-snap config: the pill pops out ALREADY in its final orientation — no
   // turn animation. "turn" (non-cover) branches are face-forward (rot 0);
@@ -1212,7 +1614,7 @@ function buildKeyframes(branchKey) {
   const orient  = cfg.cover ? 180 : 0;
   const endPill = { revealedPill: cfg.cover ? 'silhouette' : cfg.dispensed };
 
-  const START = TUBE_TOP + PILL_H * 0.35, REST = REVEAL_CY;
+  const START = TUBE_TOP + PILL_H * 0.35, REST = TUBE_TOP - 15;
   const SP = REST - START;
   const T0 = at('descent', 0), TS = at('descent', 1), TH = at('tubeHold', 1);
   const segAt = u => T0 + u * (TS - T0);
@@ -1225,48 +1627,57 @@ function buildKeyframes(branchKey) {
   const kf = [
     { t: at('introSettle', 0), state: { ...base } },
     { t: at('introSettle', 1), state: { ...base } },
-    // --- YELLOW (happy): rocks back and forth for the whole dance, then a big jump on
-    // the "yay". (No spin — the face→back flip is the separate `turn` phase.) ---
+    // --- YELLOW (happy): all horizontal movement in the air — no ground sliding ever. ---
+    // big jump right → small hop back to center → big jump left → small hop back → ready
     { t: at('yellowDance', 0.00), state: { ...base } },
-    { t: at('yellowDance', 0.12), state: { ...base, yellowDx: 9,  yellowTilt: 12,  yellowScaleX: 1.05, yellowScaleY: 0.95 } },
-    { t: at('yellowDance', 0.26), state: { ...base, yellowDx: -9, yellowTilt: -12, yellowScaleX: 1.05, yellowScaleY: 0.95 } },
-    { t: at('yellowDance', 0.40), state: { ...base, yellowDx: 9,  yellowTilt: 12 } },
-    { t: at('yellowDance', 0.54), state: { ...base, yellowDx: -9, yellowTilt: -12 } },
-    { t: at('yellowDance', 0.68), state: { ...base, yellowDx: 9,  yellowTilt: 12 } },
-    { t: at('yellowDance', 0.82), state: { ...base, yellowDx: -9, yellowTilt: -12 } },
-    { t: at('yellowDance', 0.92), state: { ...base, yellowDx: 0,  yellowTilt: 0 } },
+    { t: at('yellowDance', 0.12), state: { ...base, yellowDx:  8, yellowDy: -42, yellowTilt:  5 } },                                          // arc apex → right
+    { t: at('yellowDance', 0.24), state: { ...base, yellowDx: 14, yellowDy:  2,  yellowTilt: 10, yellowScaleX: 1.08, yellowScaleY: 0.91 } },  // land right ← beat 1
+    { t: at('yellowDance', 0.36), state: { ...base, yellowDx:  6, yellowDy: -22, yellowTilt:  4 } },                                          // hop apex → back toward center
+    { t: at('yellowDance', 0.48), state: { ...base, yellowDy: 1 } },                                                                          // land center ← beat 2
+    { t: at('yellowDance', 0.60), state: { ...base, yellowDx: -8, yellowDy: -42, yellowTilt: -5 } },                                          // arc apex → left
+    { t: at('yellowDance', 0.72), state: { ...base, yellowDx:-14, yellowDy:  2,  yellowTilt:-10, yellowScaleX: 1.08, yellowScaleY: 0.91 } },  // land left  ← beat 3
+    { t: at('yellowDance', 0.84), state: { ...base, yellowDx: -6, yellowDy: -22, yellowTilt: -4 } },                                          // hop apex → back toward center
+    { t: at('yellowDance', 0.96), state: { ...base, yellowDy: 1 } },                                                                          // land center ← beat 4
     { t: at('yellowDance', 1.00), state: { ...base } },
-    { t: at('yellowJump', 0.12), state: { ...base, yellowScaleX: 1.12, yellowScaleY: 0.85, yellowDy: 8 } },   // crouch
-    { t: at('yellowJump', 0.42), state: { ...base, yellowScaleX: 0.88, yellowScaleY: 1.16, yellowDy: -70 } }, // leap (apex on the "yay")
-    { t: at('yellowJump', 0.72), state: { ...base, yellowScaleX: 1.12, yellowScaleY: 0.85, yellowDy: 6 } },   // land
+    { t: at('yellowJump', 0.44), state: { ...base, yellowScaleX: 1.12, yellowScaleY: 0.85, yellowDy: 8 } },   // crouch (pause before here)
+    { t: at('yellowJump', 0.66), state: { ...base, yellowScaleX: 0.88, yellowScaleY: 1.16, yellowDy: -70 } }, // leap (apex on the "yay")
+    { t: at('yellowJump', 0.84), state: { ...base, yellowScaleX: 1.12, yellowScaleY: 0.85, yellowDy: 6 } },   // land
     { t: at('yellowJump', 1.00), state: { ...base } },
     { t: at('beat', 1.00), state: { ...base } },
     // --- RED (angry): seething rage-tremble — puffed up (wide/short), shuddering fast
     // side to side with a hard forward lean, NOT a loose happy sway. Then a head-shake. ---
     { t: at('redDance', 0.00), state: { ...base } },
-    { t: at('redDance', 0.05), state: { ...base, redDx: 5,  redTilt: 3,  redScaleX: 1.06, redScaleY: 0.94 } }, // puff up + shudder
-    { t: at('redDance', 0.11), state: { ...base, redDx: -5, redTilt: -3, redScaleX: 1.06, redScaleY: 0.94 } },
-    { t: at('redDance', 0.17), state: { ...base, redDx: 5,  redTilt: 3,  redScaleX: 1.06, redScaleY: 0.94 } },
-    { t: at('redDance', 0.23), state: { ...base, redDx: -5, redTilt: -3, redScaleX: 1.06, redScaleY: 0.94 } },
-    { t: at('redDance', 0.29), state: { ...base, redDx: 5,  redTilt: 3,  redScaleX: 1.06, redScaleY: 0.94 } },
-    { t: at('redDance', 0.35), state: { ...base, redDx: -5, redTilt: -3, redScaleX: 1.06, redScaleY: 0.94 } },
-    { t: at('redDance', 0.41), state: { ...base, redDx: 5,  redTilt: 3,  redScaleX: 1.06, redScaleY: 0.94 } },
-    { t: at('redDance', 0.47), state: { ...base, redDx: -5, redTilt: -3, redScaleX: 1.06, redScaleY: 0.94 } },
-    { t: at('redDance', 0.53), state: { ...base, redDx: 5,  redTilt: 3,  redScaleX: 1.06, redScaleY: 0.94 } },
-    { t: at('redDance', 0.59), state: { ...base, redDx: -5, redTilt: -3, redScaleX: 1.06, redScaleY: 0.94 } },
-    { t: at('redDance', 0.65), state: { ...base, redDx: 5,  redTilt: 3,  redScaleX: 1.06, redScaleY: 0.94 } },
-    { t: at('redDance', 0.71), state: { ...base, redDx: -5, redTilt: -3, redScaleX: 1.06, redScaleY: 0.94 } },
-    { t: at('redDance', 0.77), state: { ...base, redDx: 5,  redTilt: 3,  redScaleX: 1.06, redScaleY: 0.94 } },
-    { t: at('redDance', 0.83), state: { ...base, redDx: -5, redTilt: -3, redScaleX: 1.06, redScaleY: 0.94 } },
-    { t: at('redDance', 0.89), state: { ...base, redDx: 4,  redTilt: 2,  redScaleX: 1.05, redScaleY: 0.95 } },
+    { t: at('redDance', 0.05), state: { ...base, redDx: 7,  redTilt: 5,  redScaleX: 1.08, redScaleY: 0.92 } }, // puff up + worried shudder
+    { t: at('redDance', 0.11), state: { ...base, redDx: -7, redTilt: -5, redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: at('redDance', 0.17), state: { ...base, redDx: 7,  redTilt: 5,  redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: at('redDance', 0.23), state: { ...base, redDx: -7, redTilt: -5, redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: at('redDance', 0.29), state: { ...base, redDx: 7,  redTilt: 5,  redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: at('redDance', 0.35), state: { ...base, redDx: -7, redTilt: -5, redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: at('redDance', 0.41), state: { ...base, redDx: 7,  redTilt: 5,  redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: at('redDance', 0.47), state: { ...base, redDx: -7, redTilt: -5, redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: at('redDance', 0.53), state: { ...base, redDx: 7,  redTilt: 5,  redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: at('redDance', 0.59), state: { ...base, redDx: -7, redTilt: -5, redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: at('redDance', 0.65), state: { ...base, redDx: 7,  redTilt: 5,  redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: at('redDance', 0.71), state: { ...base, redDx: -7, redTilt: -5, redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: at('redDance', 0.77), state: { ...base, redDx: 7,  redTilt: 5,  redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: at('redDance', 0.83), state: { ...base, redDx: -7, redTilt: -5, redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: at('redDance', 0.89), state: { ...base, redDx: 5,  redTilt: 3,  redScaleX: 1.06, redScaleY: 0.94 } },
     { t: at('redDance', 0.95), state: { ...base, redDx: 0,  redTilt: 0 } },
     { t: at('redDance', 1.00), state: { ...base } },
-    { t: at('redShake', 0.12), state: { ...base, redTilt: 18 } },   // head-shake "no"
-    { t: at('redShake', 0.28), state: { ...base, redTilt: -18 } },
-    { t: at('redShake', 0.44), state: { ...base, redTilt: 15 } },
-    { t: at('redShake', 0.60), state: { ...base, redTilt: -15 } },
-    { t: at('redShake', 0.76), state: { ...base, redTilt: 10 } },
-    { t: at('redShake', 1.00), state: { ...base, redTilt: 0 } },
+    // chest bump: sideways jump — reds crouch+lean away, leap toward each other,
+    // meet in the air at peak, squish (no overlap), bounce apart + descend, settle
+    { t: at('redShake', 0.00), state: { ...base, redScaleX: 1.03, redScaleY: 0.97 } },       // tense pause
+    { t: at('redShake', 0.20), state: { ...base, redScaleX: 1.03, redScaleY: 0.97 } },       // hold
+    { t: at('redShake', 0.28), state: { ...base, redScaleX: 1.08, redScaleY: 0.90,           // wind-up: crouch + lean away
+        pillOffsets: [zero[0], zero[1], { dx: -12, dy: 4 }, { dx: 12, dy: 4 }] } },
+    { t: at('redShake', 0.44), state: { ...base, redScaleX: 0.93, redScaleY: 1.10,           // ascending + charging
+        pillOffsets: [zero[0], zero[1], { dx: 14, dy: -18 }, { dx: -14, dy: -18 }] } },
+    { t: at('redShake', 0.52), state: { ...base, redScaleX: 0.82, redScaleY: 1.18,           // IMPACT in the air (edges just touch)
+        pillOffsets: [zero[0], zero[1], { dx: 17, dy: -22 }, { dx: -17, dy: -22 }] } },
+    { t: at('redShake', 0.65), state: { ...base, redScaleX: 1.07, redScaleY: 0.92,           // bounce apart + land
+        pillOffsets: [zero[0], zero[1], { dx: 7, dy: 2 }, { dx: -7, dy: 2 }] } },
+    { t: at('redShake', 0.80), state: { ...base } },                                          // settle
+    { t: at('redShake', 1.00), state: { ...base } },
     { t: at('dancesDone', 1.00), state: { ...base } },
     { t: at('premixPause', 1.00), state: { ...base } },
     { t: at('flySquare', 1.00), state: { ...base } },         // fly in FACING
@@ -1277,38 +1688,58 @@ function buildKeyframes(branchKey) {
     { t: at('turn', 0.78), state: { ...base, pills: allTurn135 } },          // 135°
     { t: at('turn', 1.00), state: { ...base, pills: allBack } },             // 180°
     { t: at('settle',     1.00), state: { ...base, pills: allBack } },
-    // FIRST the slide-whistle drop: the chosen pill exits + descends into the tube
-    // and rests at the bottom (it just SITS — no vibration yet).
-    { t: at('exit', 1.00), state: { ...base, pills: allBack } },
-    flow(segAt(0.0)), flow(segAt(0.5)), flow(TS), flow(TH),
-    // THEN the deduction reveal, with the chosen pill RESTING in the tube — only the
-    // three remaining pills are in the arena (sansExit), the silhouette below.
-    { t: at('dedSettle',  1.00), state: inTube({ pills: sansExit }) },
-    { t: at('reveal',     1.00), state: inTube({ pills: revealedArenaSansExit }) },    // flip face-out
-    { t: at('revealHold', 0.26), state: inTube({ pills: revealedArenaSansExit }) },    // LEAD delay (sit face-out)
-    { t: at('revealHold', 0.32), state: inTube({ pills: revealedArenaPopSansExit }) }, // POP 1 — both pills (ding)
-    { t: at('revealHold', 0.39), state: inTube({ pills: revealedArenaSansExit }) },    // down
-    { t: at('revealHold', 0.44), state: inTube({ pills: revealedArenaPopSansExit }) }, // POP 2 — both pills (ding)
-    { t: at('revealHold', 0.51), state: inTube({ pills: revealedArenaSansExit }) },    // down
-    { t: at('revealHold', 0.56), state: inTube({ pills: revealedArenaPopSansExit }) }, // POP 3 — both pills (ding)
-    { t: at('revealHold', 0.63), state: inTube({ pills: revealedArenaSansExit }) },    // down
-    { t: at('revealHold', 1.00), state: inTube({ pills: revealedArenaSansExit }) },    // TRAIL delay (sit settled)
-    { t: at('rehide',     1.00), state: inTube({ pills: revPillsSansExit }) },         // rotate back — keep revealLayout kind so no snap
+    // FIRST the irrelevant arena pill crumbles while all pills are still in the arena.
+    { t: at('crumblePause', 1.00), state: { ...base, pills: allBack } },
+    // `crumble` is a monotonic 0→1 driving the particle field (break → fall → settle → fade).
+    // At crumble=1 the slot is nulled so drawScene skips it cleanly going forward.
+    { t: at('crumble', 0.00), state: { ...base, pills: allBack, crumbleSlot: CRUMBLE_SLOT, crumble: 0 } },
+    { t: at('crumble', 1.00), state: { ...base, pills: allBackNocrumble, crumbleSlot: CRUMBLE_SLOT, crumble: 1 } },
+    // THEN the chosen pill exits into the tube (crumble pill already gone from arena).
+    { t: at('exit', 1.00), state: { ...base, pills: allBackNocrumble } },
+    flow(segAt(0.0), { pills: sansExitCrumb }), flow(segAt(0.5), { pills: sansExitCrumb }), flow(TS, { pills: sansExitCrumb }), flow(TH, { pills: sansExitCrumb }),
+    // Deduction reveal — chosen pill resting in tube (silhouette), two deduction pills remain.
+    { t: at('pulsePause2', 1.00), state: inTube({ pills: sansExitCrumb }) },
+    // From here on the crumbled pill is already gone — only the two deduction pills remain.
+    { t: at('reveal',     1.00), state: inTube({ pills: revealedArenaSansExitC }) },    // flip face-out
+    { t: at('revealHold', 0.26), state: inTube({ pills: revealedArenaSansExitC }) },    // LEAD delay (sit face-out)
+    { t: at('revealHold', 0.32), state: inTube({ pills: revealedArenaPopSansExitC }) }, // POP 1 — both pills (ding)
+    { t: at('revealHold', 0.39), state: inTube({ pills: revealedArenaSansExitC }) },    // down
+    { t: at('revealHold', 0.44), state: inTube({ pills: revealedArenaPopSansExitC }) }, // POP 2 — both pills (ding)
+    { t: at('revealHold', 0.51), state: inTube({ pills: revealedArenaSansExitC }) },    // down
+    { t: at('revealHold', 0.56), state: inTube({ pills: revealedArenaPopSansExitC }) }, // POP 3 — both pills (ding)
+    { t: at('revealHold', 0.63), state: inTube({ pills: revealedArenaSansExitC }) },    // down
+    { t: at('revealHold', 1.00), state: inTube({ pills: revealedArenaSansExitC }) },    // TRAIL delay (sit settled)
+    { t: at('revealTrail', 1.00), state: inTube({ pills: revealedArenaSansExitC }) }, // extra hold before turn-back
+    { t: at('rehide',     1.00), state: inTube({ pills: revPillsSansExitC }) },         // rotate back — keep revealLayout kind so no snap
     // A split second later (postReveal) the vibration begins, building to the spit.
-    flow(at('preSpit', 1.00), { fireworks: 0 }),
-    // POP — INSTANTANEOUS. The preSpit keyframe above holds the pill resting in
-    // the tube; one render frame later (<1 frame gap) it is fully OUT at its
-    // final spot, already in its final orientation (face for "turn", back for
-    // "no-turn"), with the firework igniting on this exact frame. No travel, no
-    // overshoot, no turn — a clean cut. The face pill's position is ALWAYS the
-    // final REVEAL_CY_OUT, so it can never appear mid-flight.
-    { t: at('spit', 0.10), state: pop(REVEAL_CY_OUT, orient, 0.12) },
+    { t: at('preSpit', 1.00), state: inTube({ pills: sansExitCrumb, tubeBulge: 3, tubeTaper: 54, fireworks: 0 }) },
+    // REVEAL IN PLACE — no pop-out. The pill stays at its resting spot (REVEAL_CY,
+    // just below the box opening) where the slide-whistle descent left it. For
+    // "turn" branches it turns around from back (180) to face (0) right here; for
+    // "no-turn" (cover) branches it stays back (180). The firework ignites on this
+    // same spot. The vibration has already stopped (it ran only through preSpit).
+    // The hand-off from the resting silhouette is seamless: both sit at REVEAL_CY
+    // as a back (180) at the start of the turn, so nothing jumps.
     // `burst` is a MONOTONIC 0→1 explosion progress (particles fade as it →1).
-    { t: at('dispense', 0.50), state: pop(REVEAL_CY_OUT, orient, 0.55) },
-    // Restore `revealedPill` to its thumbnail-correct value (cover → silhouette)
-    // for the static SVG snapshots that sample endHold; on-top pill coincides.
-    { t: at('dispense', 1.00), state: pop(REVEAL_CY_OUT, orient, 0.82, endPill) },
-    { t: at('endHold',  1.00), state: pop(REVEAL_CY_OUT, orient, 1,    endPill) },
+    // Two variants (see DELAYED_REVEAL):
+    //  • INSTANT — turn + firework + chime all at the spit (original).
+    //  • DELAYED — burst out as the hidden BACK (rot 180, no firework), sit at the
+    //    goal ~1s, THEN turn around (rot→orient) as the firework ignites. The reveal
+    //    chime is moved to spit+1.0s by SOUND_CUES variant gating.
+    ...(DELAYED_REVEAL ? [
+      { t: at('spit', 0.10),    state: pop(REVEAL_CY, 180, 0) },                 // burst out — hidden back, no firework
+      { t: PH.spit.t0 + 1.00,   state: pop(REVEAL_CY, 180, 0) },                 // wait ~1s at the goal, still hidden
+      { t: PH.spit.t0 + 1.45,   state: pop(REVEAL_CY, orient, 0.55) },           // turn around + firework ignites
+      { t: PH.spit.t0 + 1.90,   state: pop(REVEAL_CY, orient, 0.82, endPill) },
+      { t: at('endHold', 1.00), state: pop(REVEAL_CY, orient, 1,    endPill) },
+    ] : [
+      { t: at('spit', 0.10),     state: pop(REVEAL_CY, orient, 0.12) },
+      { t: at('dispense', 0.50), state: pop(REVEAL_CY, orient, 0.55) },
+      // Restore `revealedPill` to its thumbnail-correct value (cover → silhouette)
+      // for the static SVG snapshots that sample endHold; on-top pill coincides.
+      { t: at('dispense', 1.00), state: pop(REVEAL_CY, orient, 0.82, endPill) },
+      { t: at('endHold',  1.00), state: pop(REVEAL_CY, orient, 1,    endPill) },
+    ]),
   ];
   return kf.filter(k => k && k.t !== undefined);
 
@@ -1316,8 +1747,8 @@ function buildKeyframes(branchKey) {
   // snap + dispense. `revealedPill` carries the kind so it renders as a back
   // pill until exitRot flips it; cover branches never flip (identity hidden).
   function pop(y, rot, burst = 0, extra) {
-    return { ...base, pills: sansExit, revealedPill: cfg.dispensed,
-      exitY: y, exitRot: rot, tubePillY: REVEAL_CY_OUT,
+    return { ...base, pills: sansExitCrumb, revealedPill: cfg.dispensed,
+      exitY: y, exitRot: rot, tubePillY: y,
       tubePillScaleX: 1, tubePillScaleY: 1, tubeBulge: 0, tubeTaper: 56,
       fireworks: 0, burst, ...extra };
   }
@@ -1326,7 +1757,8 @@ function buildKeyframes(branchKey) {
 function tweenStates(a, b, t) {
   const out = {};
   const numKeys = ['arenaCover','shakeX','fireworks','redTilt','yellowTilt','yellowDx','yellowDy','yellowScaleX','yellowScaleY',
-    'redDx','redDy','redScaleX','redScaleY','tubePillY','tubePillScaleX','tubePillScaleY','tubeBulge','tubeTaper','burst','exitY','exitRot'];
+    'redDx','redDy','redScaleX','redScaleY','tubePillY','tubePillScaleX','tubePillScaleY','tubeBulge','tubeTaper','burst','exitY','exitRot',
+    'crumble','crumbleSlot'];
   for (const k of numKeys) {
     const av = a[k], bv = b[k];
     if (typeof av === 'number' && typeof bv === 'number') out[k] = lerp(av, bv, t);
@@ -1351,7 +1783,15 @@ function tweenStates(a, b, t) {
     const ys = (typeof y === 'object' && typeof y.sc === 'number') ? y.sc : 1;
     out.pills[i] = { kind, rot: lerp(xr, yr, t), sc: lerp(xs, ys, t) };
   }
-  out.pillOffsets = (t < 0.5 ? a.pillOffsets : b.pillOffsets) || a.pillOffsets || b.pillOffsets;
+  const pa2 = a.pillOffsets, pb2 = b.pillOffsets;
+  if (pa2 && pb2 && pa2.length === pb2.length) {
+    out.pillOffsets = pa2.map((ao, i) => {
+      const bo = pb2[i] || { dx: 0, dy: 0 };
+      return { dx: lerp(ao.dx || 0, bo.dx || 0, t), dy: lerp(ao.dy || 0, bo.dy || 0, t) };
+    });
+  } else {
+    out.pillOffsets = pa2 || pb2;
+  }
   return out;
 }
 
@@ -1399,10 +1839,10 @@ function initPhysics() {
   const SP = ANIM.physics.speed;
   const make = (slotX, vx, vy) => ({ slotX, slotY: ARENA_CY, x: slotX, y: ARENA_CY, vx, vy, speed: Math.hypot(vx, vy) });
   return [
-    make(ARENA_CX - 145,  SP * 0.95,  SP * 0.55),
-    make(ARENA_CX -  70,  SP * 1.00, -SP * 0.45),
-    make(ARENA_CX +  70, -SP * 1.00,  SP * 0.50),
-    make(ARENA_CX + 145, -SP * 0.95, -SP * 0.55),
+    make(ARENA_CX - 180,  SP * 0.95,  SP * 0.55),
+    make(ARENA_CX - 105,  SP * 1.00, -SP * 0.45),
+    make(ARENA_CX + 105, -SP * 1.00,  SP * 0.50),
+    make(ARENA_CX + 180, -SP * 0.95, -SP * 0.55),
   ];
 }
 function normalizeSpeed(p) { const m = Math.hypot(p.vx, p.vy); if (m > 0) { p.vx = p.vx / m * p.speed; p.vy = p.vy / m * p.speed; } }
@@ -1597,10 +2037,97 @@ function drawFireworks(cx, cy, p) {
   ctx.restore();
 }
 
+// ---------------------------------------------------------------------------
+// PIXEL CRUMBLE. The non-flipping pill disintegrates into small "clubs" of
+// adjacent pixels (tiles sampled straight from the pill art, so each club keeps
+// its own local colours), which break apart, fall under gentle gravity, and
+// settle into a heap on the arena floor before fading. Like drawFireworks it is
+// a PURE function of progress p∈[0,1] — every per-tile attribute comes from an
+// index hash (NOT Math.random), so it is deterministic and fully scrubbable.
+let CRUMBLE = null;   // { src: <canvas>, tiles: [...] } — sampled once, then cached
+function buildCrumbleTiles() {
+  const { tile, ss } = ANIM.crumble;
+  const img = FRAMES[framePath('happy', 180)];   // the gray textured BACK (slot-2 pill)
+  if (!img || !img.complete || !img.naturalWidth) return null;
+  const W = Math.round(PILL_DRAW_W * ss), H = Math.round(PILL_DRAW_H * ss);
+  const oc = document.createElement('canvas'); oc.width = W; oc.height = H;
+  const og = oc.getContext('2d', { willReadFrequently: true });
+  og.drawImage(img, 0, 0, W, H);
+  let data;
+  try { data = og.getImageData(0, 0, W, H).data; }
+  catch (e) { return null; }                     // tainted canvas — retry later
+  const tpx = Math.max(1, Math.round(tile * ss)); // source px per club — MUST be integer
+                                                  // or sx/sy go fractional and the pixel
+                                                  // lookups below return undefined (→ no clubs)
+  const tiles = [];
+  for (let sy = 0; sy < H; sy += tpx) {
+    for (let sx = 0; sx < W; sx += tpx) {
+      const sw = Math.min(tpx, W - sx), sh = Math.min(tpx, H - sy);
+      let maxA = 0;                               // keep any club that touches the pill
+      for (let yy = sy; yy < sy + sh; yy += ss) for (let xx = sx; xx < sx + sw; xx += ss) {
+        const a = data[(yy * W + xx) * 4 + 3]; if (a > maxA) maxA = a;
+      }
+      if (maxA < 28) continue;
+      tiles.push({ sx, sy, sw, sh,
+        ox: (sx + sw / 2) / ss - PILL_DRAW_W / 2,   // club centre offset from pill centre (stage px)
+        oy: (sy + sh / 2) / ss - PILL_DRAW_H / 2,
+        w: sw / ss, h: sh / ss });
+    }
+  }
+  return { src: oc, tiles };
+}
+function drawCrumble(cx, cy, p) {
+  if (!CRUMBLE) CRUMBLE = buildCrumbleTiles();
+  if (!CRUMBLE) { drawPill('happy', cx, cy, 1, 1, 180); return; }  // art not ready → intact fallback
+  const { src, tiles } = CRUMBLE;
+  const rand = (i, s) => { const x = Math.sin(i * 127.1 + s * 311.7) * 43758.5453; return x - Math.floor(x); };
+  const { detach, fadeRate, flySpeed, velTau } = ANIM.crumble;
+  // Exponential decay: one shared timer starting at the explosion (p=0), opacity
+  // multiplied continuously toward zero — the smooth ×0.99-per-frame shape.
+  const fade = Math.exp(-p * fadeRate);
+  ctx.save();
+  ctx.globalAlpha = fade;
+  for (let i = 0; i < tiles.length; i++) {
+    const t = tiles[i];
+    const Ox = cx + t.ox, Oy = cy + t.oy;
+    const delay = rand(i, 1) * detach;                  // staggered break — sudden but not a rigid sheet
+    const ld = p - delay;
+    if (ld <= 0) {                                       // not yet detached → still part of the intact pill
+      ctx.drawImage(src, t.sx, t.sy, t.sw, t.sh, Ox - t.w / 2, Oy - t.h / 2, t.w, t.h);
+      continue;
+    }
+    // EXPERIMENT (logic to be revised): NO GRAVITY — every club flies radially off
+    // into space at constant velocity and fades out. Direction = outward from the pill
+    // centre (centre clubs get a random angle), with a little angular jitter so it
+    // reads as a spray, not a clean ring. Nothing else animates this phase, so the
+    // reveal/dispense naturally waits until the clubs are gone (a temporary pause).
+    let dx = t.ox, dy = t.oy; const dlen = Math.hypot(dx, dy);
+    if (dlen < 0.001) { const a = rand(i, 9) * 6.2832; dx = Math.cos(a); dy = Math.sin(a); }
+    else { dx /= dlen; dy /= dlen; }
+    const ja = (rand(i, 2) - 0.5) * 0.5, ca = Math.cos(ja), sa = Math.sin(ja);
+    const fx = dx * ca - dy * sa, fy = dx * sa + dy * ca;
+    const speed = flySpeed * (0.55 + rand(i, 3) * 0.9);   // initial outward velocity
+    // Velocity damping (drag): velocity decays exp with time constant velTau, so the
+    // club shoots out then decelerates toward a stop — not a constant-velocity flight.
+    const dist = speed * velTau * (1 - Math.exp(-ld / velTau));
+    const x = Ox + fx * dist;
+    const y = Oy + fy * dist;
+    const rot = (rand(i, 4) - 0.5) * 0.7 * Math.min(1, ld * 3);
+    if (Math.abs(rot) > 0.002) {
+      ctx.save(); ctx.translate(x, y); ctx.rotate(rot);
+      ctx.drawImage(src, t.sx, t.sy, t.sw, t.sh, -t.w / 2, -t.h / 2, t.w, t.h);
+      ctx.restore();
+    } else {
+      ctx.drawImage(src, t.sx, t.sy, t.sw, t.sh, x - t.w / 2, y - t.h / 2, t.w, t.h);
+    }
+  }
+  ctx.restore();
+}
+
 function slotsFor(n) {
   const cy = ARENA_CY;
-  if (n === 4) return [{ cx: ARENA_CX - 145, cy }, { cx: ARENA_CX - 70, cy },
-                       { cx: ARENA_CX + 70, cy }, { cx: ARENA_CX + 145, cy }];
+  if (n === 4) return [{ cx: ARENA_CX - 180, cy }, { cx: ARENA_CX - 105, cy },
+                       { cx: ARENA_CX + 105, cy }, { cx: ARENA_CX + 180, cy }];
   if (n === 2) return [{ cx: ARENA_CX - 100, cy }, { cx: ARENA_CX + 100, cy }];
   if (n === 1) return [{ cx: ARENA_CX, cy }];
   const span = ARENA_W * 0.6, step = span / Math.max(1, n - 1), x0 = ARENA_CX - span / 2;
@@ -1647,6 +2174,86 @@ function drawOccluder(c, frac) {
 }
 
 const SCENE_BG = true;   // naturalistic sky+ground backdrop; set false to revert to plain white
+function drawBall(cx, cy) {
+  const R = 18;
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.28)';
+  ctx.shadowBlur = 8;
+  ctx.shadowOffsetY = 4;
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
+  ctx.fillStyle = '#1E88E5'; ctx.fill();
+  ctx.strokeStyle = '#0D47A1'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.shadowColor = 'transparent';
+  ctx.beginPath();
+  ctx.arc(cx - R * 0.22, cy - R * 0.22, R * 0.52, Math.PI * 1.1, Math.PI * 1.9);
+  ctx.fillStyle = 'rgba(255,255,255,0.60)'; ctx.fill();
+  ctx.beginPath(); ctx.arc(cx - R * 0.38, cy - R * 0.38, R * 0.14, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.fill();
+  ctx.restore();
+}
+
+function drawDoor(doorFrac, doorBend) {
+  // Minimalist double door on the box bottom line. Two leaves, each anchored at
+  // a visible hinge pin sitting ON the line. The opening between the pins is
+  // wide enough for the pill to pass cleanly without touching the hinges.
+  //  • doorBend (pulses / struggle) — leaves stay CLOSED but bow outward at the
+  //    center, as if the pill is pushing and the door is resisting.
+  //  • doorFrac (spit only) — leaves swing open, clearing the seam for the pill.
+  const cx     = ARENA_CX;                   // 330 — center seam
+  const DOOR_HALF = 31;                       // pin offset from center (span 62 ≈ pill 50 + clearance)
+  const tL     = cx - DOOR_HALF;             // 299 — left hinge x
+  const tR     = cx + DOOR_HALF;             // 361 — right hinge x
+  const lineY  = TUBE_TOP;                    // 450 — the box bottom line
+  const SLAB_H = 7;                           // leaf thickness, centered on the line
+  const PIN_R  = 3;                           // hinge pin radius
+  const SEAM   = 1;                           // half-gap at the center seam when closed
+  const hingeL = tL + PIN_R, hingeR = tR - PIN_R;   // leaf roots, just inside each pin
+
+  ctx.save();
+  ctx.lineJoin    = 'round';
+  ctx.fillStyle   = THEME.tubeRim;
+  ctx.strokeStyle = THEME.tubeRimStr;
+  ctx.lineWidth   = 1.5;
+
+  // A leaf is a slab drawn from its hinge root toward the center, tilted so its
+  // far (center) end can droop downward when the door bows under pressure.
+  const leaf = (xRoot, xTip, yTip) => {
+    const len = Math.hypot(xTip - xRoot, yTip - lineY);
+    if (len < 0.5) return;
+    ctx.save();
+    ctx.translate(xRoot, lineY);
+    ctx.rotate(Math.atan2(yTip - lineY, xTip - xRoot));
+    ctx.beginPath(); ctx.roundRect(0, -SLAB_H / 2, len, SLAB_H, 1.5);
+    ctx.fill(); ctx.stroke();
+    ctx.restore();
+  };
+
+  if (doorFrac > 0.001) {
+    // OPEN: both leaves SWING outward and down about their pins, flung wide
+    // open (full length, they don't shrink away) — clearing the whole center.
+    const Lf    = (cx - SEAM) - tL;            // full leaf length (≈31)
+    const sweep = doorFrac * (Math.PI * 0.58); // up to ~104° — hangs down & splays outward
+    const aL = sweep, aR = Math.PI - sweep;    // left swings down-left, right down-right (mirror)
+    leaf(tL, tL + Lf * Math.cos(aL), lineY + Lf * Math.sin(aL));
+    leaf(tR, tR + Lf * Math.cos(aR), lineY + Lf * Math.sin(aR));
+  } else {
+    // CLOSED / BENDING: leaves meet at the center, which sags outward (down) by
+    // `drop` as the pill pushes — door flexing but giving resistance.
+    const drop = (doorBend || 0) * 11;         // BEND_MAX = 11px outward bow (matches pill press → flush, but clearly visible)
+    leaf(tL, cx - SEAM, lineY + drop);
+    leaf(tR, cx + SEAM, lineY + drop);
+  }
+
+  // ── hinge pins: on the line, drawn last so they stay visible & connected ──
+  [tL, tR].forEach(hx => {
+    ctx.beginPath(); ctx.arc(hx, lineY, PIN_R, 0, Math.PI * 2);
+    ctx.fillStyle = '#4DD9EC'; ctx.fill();
+    ctx.strokeStyle = THEME.tubeRimStr; ctx.lineWidth = 1.2; ctx.stroke();
+  });
+
+  ctx.restore();
+}
+
 function drawScene(state) {
   const s = state || {};
   // Clear the ENTIRE backing store, not just the viewBox region — the firework
@@ -1667,6 +2274,8 @@ function drawScene(state) {
     yellowDx = 0, yellowDy = 0, yellowScaleX = 1, yellowScaleY = 1, yellowTilt = 0,
     redDx = 0, redDy = 0, redScaleX = 1, redScaleY = 1, redTilt = 0, pillOffsets = null,
     tubePillScaleX = 1, tubePillScaleY = 1, tubeShakeX = 0, occluderFrac = 0,
+    crumble = 0, crumbleSlot = -1,
+    ballX = null, ballY = null, doorFrac = 0, doorBend = 0,
   } = s;
   const tubePillY = (typeof s.tubePillY === 'number') ? s.tubePillY : REVEAL_CY;
   const tubeGapHX = tubeTopHalfW(s);  // tube half-width at TUBE_TOP; stretches with the pill
@@ -1724,6 +2333,10 @@ function drawScene(state) {
       if (pillOffsets && pillOffsets[i]) { cx += pillOffsets[i].dx || 0; cy += pillOffsets[i].dy || 0; }
       // Per-pill scale pop (e.g. the deduction reveal bounce). Only set on revealed pills.
       if (typeof entry === 'object' && typeof entry.sc === 'number') { sx *= entry.sc; sy *= entry.sc; }
+      // The crumbling pill is replaced by its falling particle field, at the SAME
+      // (offset-adjusted) centre the intact pill uses — pills sit in the diamond
+      // formation here (pillOffsets), so using the bare slot would snap it sideways.
+      if (i === crumbleSlot && crumble > 0) { drawCrumble(cx, cy, crumble); return; }
       drawPill(kind, cx, cy, sx, sy, rot, i < 2 ? yellowTilt : redTilt);
     });
     ctx.restore();
@@ -1749,42 +2362,18 @@ function drawScene(state) {
   if (occluderFrac > 0) drawOccluder(ctx, occluderFrac);
   ctx.restore(); // shake
 
-  // (1) OPAQUE interior backing for the whole chute, drawn behind the pill. This
-  //     is the real fix: it carves the floor opening (covers the blue frame within
-  //     the tube) AND blocks everything that the translucent glass would otherwise
-  //     reveal behind it — the box's bottom rim, its drop shadow, the background.
-  const backing = '#e9f1f3';
-  if (revealedPill === 'silhouette') {
-    ctx.fillStyle = backing; ctx.fill(new Path2D(tubePathD(s)));
-  } else {
-    roundRect(TUBE_X, TUBE_TOP, TUBE_W, TUBE_H, 6); ctx.fillStyle = backing; ctx.fill();
-  }
+  // NO TUBE. The chute/glass has been removed — the pill simply drops out through
+  // an opening in the box floor (the seam + blue ring below) into open space. Only
+  // the descending pill, the floor opening, and the ring are drawn here.
 
-  // (2) The descending pill, over the opaque backing.
+  // (2) The descending pill, drawn in open space below the opening. Clipped to start
+  //     at the floor line so the part still inside the box stays hidden until it has
+  //     squeezed down through the ring and emerged.
   if (revealedPill === 'silhouette') {
     ctx.save();
     ctx.beginPath(); ctx.rect(ARENA_X - 60, TUBE_TOP, ARENA_W + 120, (TUBE_BOT + 240) - TUBE_TOP); ctx.clip();
     drawSilhouette(REVEAL_CX + tubeShakeX, tubePillY, tubePillScaleX, tubePillScaleY);
     ctx.restore();
-  }
-
-  // (3) Translucent glass front + OPEN-top walls (no cap line) so it reads
-  //     continuous with the box interior.
-  if (revealedPill === 'silhouette') {
-    ctx.fillStyle = THEME.tubeBody; ctx.fill(new Path2D(tubePathD(s)));
-    ctx.strokeStyle = THEME.tubeWall; ctx.lineWidth = 2.5; ctx.lineJoin = 'round';
-    ctx.stroke(new Path2D(tubePathD(s, false)));     // open top
-  } else {
-    roundRect(TUBE_X, TUBE_TOP, TUBE_W, TUBE_H, 6);
-    ctx.fillStyle = THEME.tubeBody; ctx.fill();
-    ctx.beginPath();                                  // side walls + bottom only (open top)
-    ctx.moveTo(TUBE_X, TUBE_TOP);
-    ctx.lineTo(TUBE_X, TUBE_BOT - 6);
-    ctx.quadraticCurveTo(TUBE_X, TUBE_BOT, TUBE_X + 6, TUBE_BOT);
-    ctx.lineTo(TUBE_X + TUBE_W - 6, TUBE_BOT);
-    ctx.quadraticCurveTo(TUBE_X + TUBE_W, TUBE_BOT, TUBE_X + TUBE_W, TUBE_BOT - 6);
-    ctx.lineTo(TUBE_X + TUBE_W, TUBE_TOP);
-    ctx.strokeStyle = THEME.tubeWall; ctx.lineWidth = 2.5; ctx.lineJoin = 'round'; ctx.stroke();
   }
 
   // (4) Designed floor SEAM that opens into the chute. A faint seam runs along the
@@ -1799,45 +2388,28 @@ function drawScene(state) {
   ctx.moveTo(ARENA_CX + tubeGapHX + 1, TUBE_TOP); ctx.lineTo(ARENA_X + ARENA_W - 18, TUBE_TOP);
   ctx.stroke();
   ctx.restore();
-  // depth shadow at the tube mouth: corner-cast from each wall inward rather
-  // than a flat wash, so the floor edges read as casting shadow into the opening.
-  ctx.save();
-  if (revealedPill === 'silhouette') ctx.clip(new Path2D(tubePathD(s)));
-  else { roundRect(TUBE_X, TUBE_TOP, TUBE_W, TUBE_H, 6); ctx.clip(); }
-  const shadL = ctx.createLinearGradient(ARENA_CX - tubeGapHX, 0, ARENA_CX - tubeGapHX + 20, 0);
-  shadL.addColorStop(0, 'rgba(20,50,62,0.38)'); shadL.addColorStop(1, 'rgba(20,50,62,0)');
-  ctx.fillStyle = shadL; ctx.fillRect(ARENA_CX - tubeGapHX, TUBE_TOP, 20, 14);
-  const shadR = ctx.createLinearGradient(ARENA_CX + tubeGapHX, 0, ARENA_CX + tubeGapHX - 20, 0);
-  shadR.addColorStop(0, 'rgba(20,50,62,0.38)'); shadR.addColorStop(1, 'rgba(20,50,62,0)');
-  ctx.fillStyle = shadR; ctx.fillRect(ARENA_CX + tubeGapHX - 20, TUBE_TOP, 20, 14);
-  // lit inner rim: bottom face of the floor opening catches light, reads as material thickness.
-  ctx.strokeStyle = 'rgba(255,255,255,0.42)'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(ARENA_CX - tubeGapHX + 2, TUBE_TOP + 1); ctx.lineTo(ARENA_CX + tubeGapHX - 2, TUBE_TOP + 1);
-  ctx.stroke();
-  ctx.restore();
+  // (depth-shadow removed) — with no chute below the floor, the old corner-cast
+  // mouth shadow had nothing to sit inside and protruded below the ring as a gray
+  // nub. The teal ring alone now caps the opening cleanly.
 
-  // (5) Ring/collar at the tube top — mirrors the SVG rim in lottery.js.
-  //     Drawn last in the tube stack so it caps the entrance and hides any
-  //     pill that pokes above TUBE_TOP while entering. Width tracks tubeGapHX
-  //     so it stretches with the tube body when the pill is near the top.
-  {
-    const rimHX = tubeGapHX + 4;
-    ctx.beginPath();
-    ctx.roundRect(ARENA_CX - rimHX, TUBE_TOP - 3, rimHX * 2, 10, 3);
-    ctx.fillStyle = THEME.tubeRim; ctx.fill();
-    ctx.lineWidth = 1.5; ctx.strokeStyle = THEME.tubeRimStr; ctx.stroke();
-  }
+  // (5) Double door — replaces the old teal rim. Drawn last in the tube stack
+  //     so it caps the opening and sits in front of the descending silhouette.
+  drawDoor(doorFrac, doorBend);
 
-  if (burst > 0 && burst < 1) drawFireworks(REVEAL_CX, REVEAL_CY_OUT, burst);
+  if (burst > 0 && burst < 1) drawFireworks(REVEAL_CX, REVEAL_CY, burst);
 
   if (revealedPill && revealedPill !== 'silhouette') {
     // exitY/exitRot drive the snap-out + flip (modal only); thumbnails omit
     // them and fall back to the dispensed-out position, face-forward.
-    const oy = (typeof s.exitY === 'number') ? s.exitY : REVEAL_CY_OUT;
+    const oy = (typeof s.exitY === 'number') ? s.exitY : REVEAL_CY;
+    const ox = (typeof s.exitX === 'number') ? s.exitX : REVEAL_CX;   // seq trials slide the winner in horizontally
     const orot = (typeof s.exitRot === 'number') ? s.exitRot : 0;
-    if (coverRevealedPill) drawSilhouette(REVEAL_CX, oy);
-    else drawPill(revealedPill, REVEAL_CX, oy, 1, 1, orot);
+    if (coverRevealedPill) drawSilhouette(ox, oy);
+    else drawPill(revealedPill, ox, oy, 1, 1, orot);
   }
+
+  // Ball: pre-positioned near the pill's landing spot; snaps to it at spit
+  if (ballX !== null) drawBall(ballX, ballY);
 
   if (probs && (probs.happy != null || probs.angry != null)) {
     const pct = v => `${Math.round(v * 100)}%`;
@@ -1846,6 +2418,7 @@ function drawScene(state) {
     ctx.fillStyle = THEME.happyFill; ctx.fillText(pct(probs.happy), ARENA_X + 110, labelY);
     ctx.fillStyle = THEME.angryFill; ctx.fillText(pct(probs.angry), ARENA_X + ARENA_W - 110, labelY);
   }
+
 }
 
 // ===================================================================
@@ -1861,10 +2434,10 @@ function drawScene(state) {
 // ===================================================================
 const TIMELINE_R = [
   { name: 'introSettle', dur: 0.30 }, { name: 'yellowDance', dur: 1.90 },
-  { name: 'yellowJump',  dur: 1.00 }, { name: 'beat',        dur: 0.25 },
+  { name: 'yellowJump',  dur: 1.00 }, { name: 'beat',        dur: 1.10 },
   { name: 'redDance',    dur: 1.90 }, { name: 'redShake',    dur: 1.00 },
   { name: 'dancesDone',  dur: 0.15 }, { name: 'premixPause', dur: 0.55 },
-  { name: 'rTurn',       dur: 1.275 }, // turn around in place
+  { name: 'rTurn',       dur: 0.50 },  // turn around in place
   { name: 'rTurnPause',  dur: 0.60 },
   { name: 'rFloat',      dur: 5.00 },  // constant-speed bounce, in view
   { name: 'occIn',       dur: 0.60 },  // occluder slides closed
@@ -1876,9 +2449,10 @@ const TIMELINE_R = [
   { name: 'occHoldB',    dur: 0.45 },  // pill rests at tube bottom, door still closed
   { name: 'occOut',      dur: 0.60 },  // occluder opens → static pills + pill already in the tube
   { name: 'dedSettle',   dur: 0.80 },  // brief settle, pills static
-  { name: 'reveal',      dur: 0.60 },
+  { name: 'reveal',      dur: 0.50 },
   { name: 'revealHold',  dur: 2.50 },
-  { name: 'rehide',      dur: 0.60 },
+  { name: 'revealTrail', dur: 1.19 },
+  { name: 'rehide',      dur: 0.50 },
   { name: 'postReveal',  dur: 1.00 },
   { name: 'preSpit',     dur: 2.50 },
   { name: 'spit',        dur: 0.12 },
@@ -1895,7 +2469,7 @@ const atR = (name, frac = 0) => PH_R[name].t0 + frac * PH_R[name].dur;
 // speed-up phase. Slightly padded collisions so pills never overlap on the edges.
 const R_BASE_SPEED = 200, R_DT = 1 / 120;
 const R_COLL_PAD = 1.02, R_WALL_PAD = 2;     // ~1px breathing clearance (capsule contact is exact; no 8% fudge)
-const R_ROW = [-145, -70, 70, 145].map(d => ARENA_CX + d);   // dance-row slots (= slotsFor(4))
+const R_ROW = [-180, -105, 105, 180].map(d => ARENA_CX + d);   // dance-row slots (= slotsFor(4))
 // 16 vetted seeds (see _archive/render/vet_seeds.mjs): each intermixes well,
 // keeps the pills moving in DIVERGING directions (never drifting together), and
 // leaves the lowest resting pill a collision-free straight lane to the tube mouth.
@@ -1922,28 +2496,13 @@ function buildRandomSim(seed) {
   });
   pills.forEach(normalizeSpeed);
   const T0 = PH_R.rFloat.t0, T1 = PH_R.occStop.t1, frames = [];
-  const collisions = [];                            // pill-pill impact timestamps (visible bounce only)
-  const pairLastFired = {};                         // 'i-j' → last fire time for debounce
-  const COLL_DEBOUNCE = 0.25;                       // s — min gap before same pair fires again
-  const COLL_LEAD = 0.07;                           // s — fire this early to compensate audio latency
-  const COLL_T_END = PH_R.occIn.t1;                // only while pills are still in view
   for (let t = T0; t <= T1 + 1e-9; t += R_DT) {
     frames.push(pills.map(p => ({ x: p.x, y: p.y })));
     const rate = rRate(t);
     for (const p of pills) { p.speed = R_BASE_SPEED * rate; normalizeSpeed(p); }
     stepPhysics(pills, R_DT, R_COLL_PAD, R_WALL_PAD);
-    if (t <= COLL_T_END) {
-      for (let i = 0; i < pills.length; i++) for (let j = i + 1; j < pills.length; j++) {
-        const c = capsuleContact(pills[i].x, pills[i].y, pills[j].x, pills[j].y);
-        if (c.D < 2 * c.RH * R_COLL_PAD) {
-          const key = i + '-' + j;
-          const last = pairLastFired[key] !== undefined ? pairLastFired[key] : -Infinity;
-          if (t - last >= COLL_DEBOUNCE) { collisions.push(t); pairLastFired[key] = t; }
-        }
-      }
-    }
   }
-  return { T0, dt: R_DT, frames, frozen: frames[frames.length - 1].map(p => ({ x: p.x, y: p.y })), collisions };
+  return { T0, dt: R_DT, frames, frozen: frames[frames.length - 1].map(p => ({ x: p.x, y: p.y })) };
 }
 function rSample(sim, t) {
   const f = (t - sim.T0) / sim.dt, i = Math.max(0, Math.min(sim.frames.length - 1, Math.floor(f)));
@@ -1997,6 +2556,7 @@ function pickChosenAndMap(sim, cfg) {
 
 // Per-play state: which seed, its trajectory, and the identity/exit map.
 let rState = { seed: null, sim: null, rmap: null, seedIdx: -1 };
+let rPrevPairContact = {};   // live rising-edge collision detector for tick()
 let rSeedCursor = 0, rPinnedSeed = null;
 // Seeding is "pinned" for now: every fresh play/replay uses one of these two
 // vetted draws (the seed-bar buttons labelled 7 & 8 → indices 6 & 7), chosen at
@@ -2049,50 +2609,57 @@ function buildKeyframesRandom(branchKey, rmap) {
   const flow = (tt, extra = {}) => ({ t: tt, state: inTube({ tubePillY: flowY(tt), tubeBulge: 3, tubeTaper: 54, ...extra }) });
   function pop(y, rot, burst = 0, extra) {
     return { ...base, pills: sansExit, revealedPill: rmap.dispensed,
-      exitY: y, exitRot: rot, tubePillY: REVEAL_CY_OUT,
+      exitY: y, exitRot: rot, tubePillY: y,
       tubePillScaleX: 1, tubePillScaleY: 1, tubeBulge: 0, tubeTaper: 56, fireworks: 0, burst, ...extra };
   }
   const kf = [
     { t: atR('introSettle', 0), state: { ...base } },
     { t: atR('introSettle', 1), state: { ...base } },
     { t: atR('yellowDance', 0.00), state: { ...base } },
-    { t: atR('yellowDance', 0.12), state: { ...base, yellowDx: 9,  yellowTilt: 12,  yellowScaleX: 1.05, yellowScaleY: 0.95 } },
-    { t: atR('yellowDance', 0.26), state: { ...base, yellowDx: -9, yellowTilt: -12, yellowScaleX: 1.05, yellowScaleY: 0.95 } },
-    { t: atR('yellowDance', 0.40), state: { ...base, yellowDx: 9,  yellowTilt: 12 } },
-    { t: atR('yellowDance', 0.54), state: { ...base, yellowDx: -9, yellowTilt: -12 } },
-    { t: atR('yellowDance', 0.68), state: { ...base, yellowDx: 9,  yellowTilt: 12 } },
-    { t: atR('yellowDance', 0.82), state: { ...base, yellowDx: -9, yellowTilt: -12 } },
-    { t: atR('yellowDance', 0.92), state: { ...base, yellowDx: 0,  yellowTilt: 0 } },
+    { t: atR('yellowDance', 0.12), state: { ...base, yellowDx:  8, yellowDy: -42, yellowTilt:  5 } },
+    { t: atR('yellowDance', 0.24), state: { ...base, yellowDx: 14, yellowDy:  2,  yellowTilt: 10, yellowScaleX: 1.08, yellowScaleY: 0.91 } },
+    { t: atR('yellowDance', 0.36), state: { ...base, yellowDx:  6, yellowDy: -22, yellowTilt:  4 } },
+    { t: atR('yellowDance', 0.48), state: { ...base, yellowDy: 1 } },
+    { t: atR('yellowDance', 0.60), state: { ...base, yellowDx: -8, yellowDy: -42, yellowTilt: -5 } },
+    { t: atR('yellowDance', 0.72), state: { ...base, yellowDx:-14, yellowDy:  2,  yellowTilt:-10, yellowScaleX: 1.08, yellowScaleY: 0.91 } },
+    { t: atR('yellowDance', 0.84), state: { ...base, yellowDx: -6, yellowDy: -22, yellowTilt: -4 } },
+    { t: atR('yellowDance', 0.96), state: { ...base, yellowDy: 1 } },
     { t: atR('yellowDance', 1.00), state: { ...base } },
-    { t: atR('yellowJump', 0.12), state: { ...base, yellowScaleX: 1.12, yellowScaleY: 0.85, yellowDy: 8 } },
-    { t: atR('yellowJump', 0.42), state: { ...base, yellowScaleX: 0.88, yellowScaleY: 1.16, yellowDy: -70 } },
-    { t: atR('yellowJump', 0.72), state: { ...base, yellowScaleX: 1.12, yellowScaleY: 0.85, yellowDy: 6 } },
+    { t: atR('yellowJump', 0.44), state: { ...base, yellowScaleX: 1.12, yellowScaleY: 0.85, yellowDy: 8 } },
+    { t: atR('yellowJump', 0.66), state: { ...base, yellowScaleX: 0.88, yellowScaleY: 1.16, yellowDy: -70 } },
+    { t: atR('yellowJump', 0.84), state: { ...base, yellowScaleX: 1.12, yellowScaleY: 0.85, yellowDy: 6 } },
     { t: atR('yellowJump', 1.00), state: { ...base } },
     { t: atR('beat', 1.00), state: { ...base } },
     { t: atR('redDance', 0.00), state: { ...base } },
-    { t: atR('redDance', 0.05), state: { ...base, redDx: 5,  redTilt: 3,  redScaleX: 1.06, redScaleY: 0.94 } },
-    { t: atR('redDance', 0.11), state: { ...base, redDx: -5, redTilt: -3, redScaleX: 1.06, redScaleY: 0.94 } },
-    { t: atR('redDance', 0.17), state: { ...base, redDx: 5,  redTilt: 3,  redScaleX: 1.06, redScaleY: 0.94 } },
-    { t: atR('redDance', 0.23), state: { ...base, redDx: -5, redTilt: -3, redScaleX: 1.06, redScaleY: 0.94 } },
-    { t: atR('redDance', 0.29), state: { ...base, redDx: 5,  redTilt: 3,  redScaleX: 1.06, redScaleY: 0.94 } },
-    { t: atR('redDance', 0.35), state: { ...base, redDx: -5, redTilt: -3, redScaleX: 1.06, redScaleY: 0.94 } },
-    { t: atR('redDance', 0.41), state: { ...base, redDx: 5,  redTilt: 3,  redScaleX: 1.06, redScaleY: 0.94 } },
-    { t: atR('redDance', 0.47), state: { ...base, redDx: -5, redTilt: -3, redScaleX: 1.06, redScaleY: 0.94 } },
-    { t: atR('redDance', 0.53), state: { ...base, redDx: 5,  redTilt: 3,  redScaleX: 1.06, redScaleY: 0.94 } },
-    { t: atR('redDance', 0.59), state: { ...base, redDx: -5, redTilt: -3, redScaleX: 1.06, redScaleY: 0.94 } },
-    { t: atR('redDance', 0.65), state: { ...base, redDx: 5,  redTilt: 3,  redScaleX: 1.06, redScaleY: 0.94 } },
-    { t: atR('redDance', 0.71), state: { ...base, redDx: -5, redTilt: -3, redScaleX: 1.06, redScaleY: 0.94 } },
-    { t: atR('redDance', 0.77), state: { ...base, redDx: 5,  redTilt: 3,  redScaleX: 1.06, redScaleY: 0.94 } },
-    { t: atR('redDance', 0.83), state: { ...base, redDx: -5, redTilt: -3, redScaleX: 1.06, redScaleY: 0.94 } },
-    { t: atR('redDance', 0.89), state: { ...base, redDx: 4,  redTilt: 2,  redScaleX: 1.05, redScaleY: 0.95 } },
+    { t: atR('redDance', 0.05), state: { ...base, redDx: 7,  redTilt: 5,  redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: atR('redDance', 0.11), state: { ...base, redDx: -7, redTilt: -5, redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: atR('redDance', 0.17), state: { ...base, redDx: 7,  redTilt: 5,  redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: atR('redDance', 0.23), state: { ...base, redDx: -7, redTilt: -5, redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: atR('redDance', 0.29), state: { ...base, redDx: 7,  redTilt: 5,  redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: atR('redDance', 0.35), state: { ...base, redDx: -7, redTilt: -5, redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: atR('redDance', 0.41), state: { ...base, redDx: 7,  redTilt: 5,  redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: atR('redDance', 0.47), state: { ...base, redDx: -7, redTilt: -5, redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: atR('redDance', 0.53), state: { ...base, redDx: 7,  redTilt: 5,  redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: atR('redDance', 0.59), state: { ...base, redDx: -7, redTilt: -5, redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: atR('redDance', 0.65), state: { ...base, redDx: 7,  redTilt: 5,  redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: atR('redDance', 0.71), state: { ...base, redDx: -7, redTilt: -5, redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: atR('redDance', 0.77), state: { ...base, redDx: 7,  redTilt: 5,  redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: atR('redDance', 0.83), state: { ...base, redDx: -7, redTilt: -5, redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: atR('redDance', 0.89), state: { ...base, redDx: 5,  redTilt: 3,  redScaleX: 1.06, redScaleY: 0.94 } },
     { t: atR('redDance', 0.95), state: { ...base, redDx: 0,  redTilt: 0 } },
     { t: atR('redDance', 1.00), state: { ...base } },
-    { t: atR('redShake', 0.12), state: { ...base, redTilt: 18 } },
-    { t: atR('redShake', 0.28), state: { ...base, redTilt: -18 } },
-    { t: atR('redShake', 0.44), state: { ...base, redTilt: 15 } },
-    { t: atR('redShake', 0.60), state: { ...base, redTilt: -15 } },
-    { t: atR('redShake', 0.76), state: { ...base, redTilt: 10 } },
-    { t: atR('redShake', 1.00), state: { ...base, redTilt: 0 } },
+    { t: atR('redShake', 0.00), state: { ...base, redScaleX: 1.03, redScaleY: 0.97 } },
+    { t: atR('redShake', 0.20), state: { ...base, redScaleX: 1.03, redScaleY: 0.97 } },
+    { t: atR('redShake', 0.28), state: { ...base, redScaleX: 1.08, redScaleY: 0.90,
+        pillOffsets: [zero[0], zero[1], { dx: -12, dy: 4 }, { dx: 12, dy: 4 }] } },
+    { t: atR('redShake', 0.44), state: { ...base, redScaleX: 0.93, redScaleY: 1.10,
+        pillOffsets: [zero[0], zero[1], { dx: 14, dy: -18 }, { dx: -14, dy: -18 }] } },
+    { t: atR('redShake', 0.52), state: { ...base, redScaleX: 0.82, redScaleY: 1.18,
+        pillOffsets: [zero[0], zero[1], { dx: 17, dy: -22 }, { dx: -17, dy: -22 }] } },
+    { t: atR('redShake', 0.65), state: { ...base, redScaleX: 1.07, redScaleY: 0.92,
+        pillOffsets: [zero[0], zero[1], { dx: 7, dy: 2 }, { dx: -7, dy: 2 }] } },
+    { t: atR('redShake', 0.80), state: { ...base } },
+    { t: atR('redShake', 1.00), state: { ...base } },
     { t: atR('dancesDone', 1.00), state: { ...base } },
     { t: atR('premixPause', 1.00), state: { ...base } },
     // --- turn around IN PLACE at the row (stepped angles so the roll reads) ---
@@ -2119,12 +2686,13 @@ function buildKeyframesRandom(branchKey, rmap) {
     { t: atR('revealHold', 0.56), state: inTube({ pills: revealedArenaPopSansExit }) },
     { t: atR('revealHold', 0.63), state: inTube({ pills: revealedArenaSansExit }) },
     { t: atR('revealHold', 1.00), state: inTube({ pills: revealedArenaSansExit }) },
+    { t: atR('revealTrail', 1.00), state: inTube({ pills: revealedArenaSansExit }) },
     { t: atR('rehide',     1.00), state: inTube({ pills: sansExit }) },
     flow(atR('preSpit', 1.00), { fireworks: 0 }),
-    { t: atR('spit', 0.10), state: pop(REVEAL_CY_OUT, orient, 0.12) },
-    { t: atR('dispense', 0.50), state: pop(REVEAL_CY_OUT, orient, 0.55) },
-    { t: atR('dispense', 1.00), state: pop(REVEAL_CY_OUT, orient, 0.82, endPill) },
-    { t: atR('endHold',  1.00), state: pop(REVEAL_CY_OUT, orient, 1, endPill) },
+    { t: atR('spit', 0.10), state: pop(REVEAL_CY, 180, 0.12) },
+    { t: atR('dispense', 0.50), state: pop(REVEAL_CY, orient, 0.55) },
+    { t: atR('dispense', 1.00), state: pop(REVEAL_CY, orient, 0.82, endPill) },
+    { t: atR('endHold',  1.00), state: pop(REVEAL_CY, orient, 1, endPill) },
   ];
   return kf.filter(k => k && k.t !== undefined);
 }
@@ -2186,18 +2754,28 @@ function computeStateRandom(kf, _exit, t) {
 }
 
 // ---- Mode selection (Spinning vs Random) ----
-let lotteryMode = 'spin';
-const modeDuration = () => lotteryMode === 'occlusion' ? DURATION_R : DURATION;
+// Default to Sequential — the Familiarize→Train→Test design is the assumed
+// presentation; Classic (the single spinning-lottery movie) is opt-in via the
+// Presentation toggle on page 1 (Event types).
+let lotteryMode = 'seq';
+const modeDuration = () => lotteryMode === 'occlusion' ? DURATION_R
+                         : lotteryMode === 'seq' ? (seqIsIntro() ? DURATION_SEQ_INTRO : seqIsTrial() ? DURATION_SEQ_TRIAL : DURATION_SEQ)
+                         : DURATION;
 function syncModeButtons() {
   const tog = document.getElementById('mode-toggle'); if (!tog) return;
   tog.querySelectorAll('button[data-mode]').forEach(b => b.classList.toggle('active', b.dataset.mode === lotteryMode));
 }
 function setLotteryMode(m, pinnedSeed) {
-  lotteryMode = (m === 'occlusion' || m === 'random') ? 'occlusion' : 'spin';
+  lotteryMode = (m === 'occlusion' || m === 'random') ? 'occlusion'
+              : (m === 'seq' || m === 'sequential') ? 'seq' : 'spin';
   rPinnedSeed = (typeof pinnedSeed === 'number' && !isNaN(pinnedSeed)) ? pinnedSeed : null;
   syncModeButtons();
 }
 window.setLotteryMode = setLotteryMode;
+// True when the current Sequential-mode movie is a familiarization demo (trial1/trial2)
+// rather than a condition test movie — routes the seq timeline/cues/keyframes.
+function seqIsTrial() { return lotteryMode === 'seq' && (currentBranch === 'trial1' || currentBranch === 'trial2'); }
+function seqIsIntro() { return lotteryMode === 'seq' && currentBranch === 'trial0'; }
 
 // ---- Seed selector (occlusion mode): audition every vetted draw ----
 // Hidden for now (seeding is pinned to 7/8). Flip SHOW_SEED_BAR to true to bring
@@ -2287,11 +2865,20 @@ const FPS = 60, TOTAL_FRAMES = Math.round(DURATION * FPS);
 
 function computeState(kf, EXIT_SLOT, t) {
   let state = stateAtTime(kf, t);
+  // Ball + door visible from t=0. Ball snaps 12px upward at spit. Door closed until physics section.
+  { const BY = REVEAL_CY + 60;
+    // After the pill pops out, the ball snaps UP to the agent and overlaps its
+    // base slightly — the agent "owns" the ball. Overlap kept subtle.
+    state = { ...state, ballX: REVEAL_CX, ballY: t < PH.spit.t0 ? BY + 12 : BY - 12, doorFrac: 0 }; }
   if (t < PH.flySquare.t0) return state;
 
   const CX = ARENA_CX, CY = ARENA_CY, R = ANIM.orbit.radius, D2R = Math.PI / 180;
-  const posAt = deg => ({ x: CX + R * Math.cos(deg * D2R), y: CY + R * Math.sin(deg * D2R) });
-  const slotX = [-145, -70, 70, 145].map(d => CX + d);
+  // Diamond center is lifted above the arena center so the top pill rides just
+  // under the box top. CY (the dance-row baseline) stays put for the fly-in and
+  // for the pillOffsets math; only the diamond geometry uses OCY.
+  const OCY = ARENA_CY - ANIM.orbit.lift;
+  const posAt = deg => ({ x: CX + R * Math.cos(deg * D2R), y: OCY + R * Math.sin(deg * D2R) });
+  const slotX = [-180, -105, 105, 180].map(d => CX + d);
   // Diamond, point-symmetric: outer pills → sides (L/R), inner pills → top/bottom.
   // Opposite pills sit truly opposite (180/0, 270/90) so the spin keeps it balanced.
   // slots: [outer-L, inner-L, inner-R, outer-R]
@@ -2299,7 +2886,7 @@ function computeState(kf, EXIT_SLOT, t) {
   const totalSpin = ANIM.orbit.turns * 360 + (((90 - base[EXIT_SLOT]) % 360) + 360) % 360;
   const finalDeg = i => base[i] + totalSpin;
   const sinkY = tt => {
-    const y0 = CY + R, REST = REVEAL_CY;
+    const y0 = OCY + R, REST = TUBE_TOP - 41.5; // pill bottom rests flush ON the door's top surface (no overlap)
     const u = Math.min(1, Math.max(0, (tt - PH.exit.t0) / (PH.descent.t1 - PH.exit.t0)));
     return y0 + (REST - y0) * u * u;
   };
@@ -2321,7 +2908,10 @@ function computeState(kf, EXIT_SLOT, t) {
 
   if (t >= PH.exit.t0 && t < PH.spit.t0) {
     const y = sinkY(t);
-    if (y >= TUBE_TOP - PILL_DRAW_H * 0.5) {
+    // Threshold must sit ABOVE the raised REST (TUBE_TOP-41.5) so the pill counts
+    // as "at the mouth" while resting on the door — otherwise revealedPill gets
+    // nulled and the whole pulse/preSpit struggle (gated on it) goes dead.
+    if (y >= TUBE_TOP - PILL_DRAW_H * 0.62) {
       // Pill has reached the tube mouth: it IS the in-tube silhouette. Force
       // its tube position to the sink position so the arena (straddle) half
       // and the tube half read as one continuous pill.
@@ -2340,19 +2930,504 @@ function computeState(kf, EXIT_SLOT, t) {
     }
   }
 
-  // Suspense buzz: the pill rests silently in the tube through the deduction reveal;
-  // only AFTER the reveal finishes (a split second into postReveal→preSpit) does it
-  // begin to buzz, building — in amplitude AND frequency — all the way to the spit.
-  // Deterministic chirp → fully scrubbable.
-  const vibStart = PH.preSpit.t0;  // begins only after the deduction reveal (reveal→hold→rehide) finishes
-  const vibEnd = PH.spit.t0;       // the pop
-  if (state.revealedPill === 'silhouette' && t >= vibStart && t < vibEnd) {
-    const tau = t - vibStart, dur = vibEnd - vibStart, u = tau / dur;  // 0→1 across the build
-    const env = 0.25 + 0.75 * Math.pow(u, 1.6);             // perceptible from the start, grows
-    const f0 = 6, f1 = 13;                                  // Hz: calm → tense (not frantic)
-    const phase = 2 * Math.PI * (f0 * tau + 0.5 * (f1 - f0) / dur * tau * tau);
-    state = { ...state, tubeShakeX: ANIM.suspense.amp * env * Math.sin(phase) };
+  // Two brief pre-reveal pulses: whole pill pushes down + rattles laterally.
+  // The arena portion (above rim) and the silhouette (below) must move as one piece,
+  // so we patch pillOffsets[EXIT_SLOT] with the same delta after updating the tube state.
+  let doorFrac = 0, doorBend = 0;
+  for (const ph of [PH.pulse1, PH.pulse2]) {
+    if (state.revealedPill === 'silhouette' && t >= ph.t0 && t < ph.t1) {
+      const tau = t - ph.t0, dur = ph.dur;
+      const env = Math.sin(Math.PI * tau / dur);
+      const pushSin = Math.max(0, Math.sin(2 * Math.PI * 5 * tau));
+      const pushY   = 11 * env * pushSin;  // equals the door's bow → pill stays flush against the door, no overlap
+      const lateralX = ANIM.suspense.amp * 0.55 * env * Math.sin(2 * Math.PI * 9 * tau);
+      state = { ...state, tubePillY: state.tubePillY + pushY, tubeShakeX: lateralX };
+      if (state.pills && state.pills[EXIT_SLOT] && state.pillOffsets) {
+        const offs2 = state.pillOffsets.slice();
+        const o = offs2[EXIT_SLOT];
+        offs2[EXIT_SLOT] = { dx: o.dx + lateralX, dy: o.dy + pushY };
+        state = { ...state, pillOffsets: offs2 };
+      }
+      // Door does NOT open here — it bows outward (resists) in sync with the push
+      doorBend = Math.max(doorBend, env * pushSin);
+    }
   }
+  // Sustained struggle: push + rattle build together until the spit.
+  const vibStart = PH.preSpit.t0;
+  const vibEnd = PH.spit.t0;
+  if (state.revealedPill === 'silhouette' && t >= vibStart && t < vibEnd) {
+    const tau = t - vibStart, dur = vibEnd - vibStart, u = tau / dur;
+    const pushAmp  = 11;                                   // equals the door bow so the pill stays flush, no penetration
+    const env      = 0.30 + 0.40 * Math.pow(u, 1.6);      // gentler ceiling — final shake was too aggressive
+    const f0 = 4, f1 = 16;                                 // frequency chirps 4 → 16 Hz (gets faster)
+    const chirpPhase = 2 * Math.PI * (f0 * tau + 0.5 * (f1 - f0) / dur * tau * tau);
+    const pushSin  = Math.max(0, Math.sin(chirpPhase));
+    const pushY    = pushAmp * env * pushSin;
+    const lateralX = ANIM.suspense.amp * env * Math.sin(2 * Math.PI * (6 * tau + 0.5 * 16 / dur * tau * tau));
+    state = { ...state, tubePillY: state.tubePillY + pushY, tubeShakeX: lateralX };
+    if (state.pills && state.pills[EXIT_SLOT] && state.pillOffsets) {
+      const offs2 = state.pillOffsets.slice();
+      const o = offs2[EXIT_SLOT];
+      offs2[EXIT_SLOT] = { dx: o.dx + lateralX, dy: o.dy + pushY };
+      state = { ...state, pillOffsets: offs2 };
+    }
+    // Door bows harder as the struggle intensifies — still closed, just flexing
+    doorBend = Math.max(doorBend, env * pushSin);
+  }
+  // After spit: door springs fully open in 120 ms
+  if (t >= PH.spit.t0) doorFrac = Math.min(1, (t - PH.spit.t0) / 0.12);
+  // Additive lateral vibration rattle — on top of the push motion above.
+  // ANIM.suspense.amp (2.8px) is too small to see on the arena body; use a dedicated amplitude.
+  const VIBE_AMP = 2;
+  for (const ph of [PH.pulse1, PH.pulse2]) {
+    if (state.revealedPill === 'silhouette' && t >= ph.t0 && t < ph.t1) {
+      const tau = t - ph.t0, dur = ph.dur;
+      const env = Math.sin(Math.PI * tau / dur);
+      const vibX = VIBE_AMP * env * Math.sin(2 * Math.PI * 14 * tau);
+      state = { ...state, tubeShakeX: (state.tubeShakeX || 0) + vibX };
+      if (state.pills && state.pills[EXIT_SLOT] && state.pillOffsets) {
+        const offs2 = state.pillOffsets.slice();
+        offs2[EXIT_SLOT] = { dx: offs2[EXIT_SLOT].dx + vibX, dy: offs2[EXIT_SLOT].dy };
+        state = { ...state, pillOffsets: offs2 };
+      }
+    }
+  }
+  if (state.revealedPill === 'silhouette' && t >= PH.preSpit.t0 && t < PH.spit.t0) {
+    const tau = t - PH.preSpit.t0, dur = PH.spit.t0 - PH.preSpit.t0, u = tau / dur;
+    const env = 0.25 + 0.35 * Math.pow(u, 1.6);          // gentler additive rattle at the end
+    const f0 = 10, f1 = 18;
+    const phase = 2 * Math.PI * (f0 * tau + 0.5 * (f1 - f0) / dur * tau * tau);
+    const vibX = VIBE_AMP * env * Math.sin(phase);
+    state = { ...state, tubeShakeX: (state.tubeShakeX || 0) + vibX };
+    if (state.pills && state.pills[EXIT_SLOT] && state.pillOffsets) {
+      const offs2 = state.pillOffsets.slice();
+      offs2[EXIT_SLOT] = { dx: offs2[EXIT_SLOT].dx + vibX, dy: offs2[EXIT_SLOT].dy };
+      state = { ...state, pillOffsets: offs2 };
+    }
+  }
+  state = { ...state, doorFrac, doorBend };
+  return state;
+}
+
+// ===================================================================
+// SEQUENTIAL MODE — restructured TEST movie + familiarization trials.
+// Set just before rendering a seq movie (playAnimation / export) so the
+// state computer knows which seq timeline (test vs trial) is active.
+// ===================================================================
+let seqMovieIsTrial = false;
+// Derive a seq TEST config from the classic CFG so the deduction EVIDENCE is
+// identical, but re-roled for the square-on-corner: slot0=bottom(exit/chosen),
+// slots1,2=sides(reveal), slot3=top(crumble). The dance still needs yellows in
+// slots 0,1 and reds in 2,3, so the initial `layout` stays [h,h,a,a]; the correct
+// revealed identities are placed on the side slots via a derived revealLayout
+// (applied while the pills are hidden backs, so the swap is invisible).
+function seqCfgFrom(cfg) {
+  const src = cfg.revealLayout || cfg.layout;
+  const revIds = cfg.revealSlots.map(i => src[i]);                 // the two revealed identities
+  const classicCrumble = [0,1,2,3].find(i => i !== cfg.exitSlot && !cfg.revealSlots.includes(i));
+  const crumbleId = src[classicCrumble];
+  return {
+    exitSlot: 0,
+    layout: ['happy', 'happy', 'angry', 'angry'],                  // dance grouping (yellows 0,1 / reds 2,3)
+    revealLayout: [cfg.dispensed, revIds[0], revIds[1], crumbleId],// sides (1,2) show the evidence pair
+    revealSlots: [1, 2],
+    dispensed: cfg.dispensed,
+    cover: cfg.cover,
+  };
+}
+
+function buildKeyframesSequential(branchKey) {
+  if (branchKey === 'trial0') return buildKeyframesSeqIntro(branchKey);
+  if (branchKey === 'trial1' || branchKey === 'trial2') return buildKeyframesSeqTrial(branchKey);
+  const cfg = seqCfgFrom(CFG[branchKey] || CFG.visual);
+  const A = atS;
+  const pills = cfg.layout;
+  const allFace = pills.map(k => ({ kind: k, rot: 0 }));
+  const allBack = pills.map(k => ({ kind: k, rot: 180 }));
+  const allTurn45  = pills.map(k => ({ kind: k, rot: 45 }));
+  const allTurn90  = pills.map(k => ({ kind: k, rot: 90 }));
+  const allTurn135 = pills.map(k => ({ kind: k, rot: 135 }));
+  const EXIT = 0, CRUMBLE = 3;
+  const revPills = cfg.revealLayout.map(k => ({ kind: k, rot: 180 }));
+  const faceSides = arr => arr.map((p, i) => (p && cfg.revealSlots.includes(i)) ? { ...p, rot: 0 } : p);
+  const popSides  = arr => arr.map((p, i) => (p && cfg.revealSlots.includes(i)) ? { ...p, rot: 0, sc: 1.18 } : p);
+  const dropTop   = arr => arr.map((p, i) => i === CRUMBLE ? null : p);
+  const dropExit  = arr => arr.map((p, i) => i === EXIT ? null : p);
+  const allBackNo   = dropTop(allBack);                            // top gone after explosion
+  const arenaReveal = dropTop(faceSides(revPills));               // sides face-out, top gone, bottom(exit) back
+  const arenaPop    = dropTop(popSides(revPills));
+  const sidesOnly   = dropExit(arenaReveal);                       // after the chosen drops: only the 2 side pills
+  const zero = pills.map(() => ({ dx: 0, dy: 0 }));
+  const base = { pills: allFace, revealedPill: null, shakeX: 0, fireworks: 0, burst: 0,
+                 yellowDx: 0, yellowDy: 0, yellowScaleX: 1, yellowScaleY: 1,
+                 redDx: 0, redDy: 0, redScaleX: 1, redScaleY: 1, redTilt: 0, pillOffsets: zero };
+  const orient  = cfg.cover ? 180 : 0;
+  const endPill = { revealedPill: cfg.cover ? 'silhouette' : cfg.dispensed };
+  const REST = TUBE_TOP - 41.5;
+  // chosen pill drawn ON TOP for the through→goal→flip ending (delayed-reveal style)
+  const pop = (y, rot, burst = 0, extra) => ({ ...base, pills: sidesOnly, revealedPill: cfg.dispensed,
+    exitY: y, exitRot: rot, tubePillY: y, tubePillScaleX: 1, tubePillScaleY: 1, tubeBulge: 0, tubeTaper: 56,
+    fireworks: 0, burst, ...extra });
+  const tube = (extra = {}) => ({ ...base, pills: sidesOnly, revealedPill: 'silhouette',
+    tubePillY: REST, tubePillScaleX: 1, tubePillScaleY: 1, tubeBulge: 3, tubeTaper: 54, ...extra });
+
+  const kf = [
+    { t: A('introSettle', 0), state: { ...base } },
+    { t: A('introSettle', 1), state: { ...base } },
+    // YELLOW "yay" leap (dance sway dropped)
+    { t: A('yellowJump', 0.10), state: { ...base } },
+    { t: A('yellowJump', 0.44), state: { ...base, yellowScaleX: 1.12, yellowScaleY: 0.85, yellowDy: 8 } },
+    { t: A('yellowJump', 0.66), state: { ...base, yellowScaleX: 0.88, yellowScaleY: 1.16, yellowDy: -70 } },
+    { t: A('yellowJump', 0.84), state: { ...base, yellowScaleX: 1.12, yellowScaleY: 0.85, yellowDy: 6 } },
+    { t: A('yellowJump', 1.00), state: { ...base } },
+    { t: A('beat', 1.00), state: { ...base } },
+    // RED "hmm" + chest bump (red shudder dropped)
+    { t: A('redShake', 0.00), state: { ...base, redScaleX: 1.03, redScaleY: 0.97 } },
+    { t: A('redShake', 0.20), state: { ...base, redScaleX: 1.03, redScaleY: 0.97 } },
+    { t: A('redShake', 0.28), state: { ...base, redScaleX: 1.08, redScaleY: 0.90, pillOffsets: [zero[0], zero[1], { dx: -12, dy: 4 }, { dx: 12, dy: 4 }] } },
+    { t: A('redShake', 0.44), state: { ...base, redScaleX: 0.93, redScaleY: 1.10, pillOffsets: [zero[0], zero[1], { dx: 14, dy: -18 }, { dx: -14, dy: -18 }] } },
+    { t: A('redShake', 0.52), state: { ...base, redScaleX: 0.82, redScaleY: 1.18, pillOffsets: [zero[0], zero[1], { dx: 17, dy: -22 }, { dx: -17, dy: -22 }] } },
+    { t: A('redShake', 0.65), state: { ...base, redScaleX: 1.07, redScaleY: 0.92, pillOffsets: [zero[0], zero[1], { dx: 7, dy: 2 }, { dx: -7, dy: 2 }] } },
+    { t: A('redShake', 0.80), state: { ...base } },
+    { t: A('redShake', 1.00), state: { ...base } },
+    { t: A('dancesDone', 1.00), state: { ...base } },
+    // FLIP to backs IN PLACE, before gathering — stepped through the angles
+    { t: A('flip', 0.10), state: { ...base } },
+    { t: A('flip', 0.34), state: { ...base, pills: allTurn45 } },
+    { t: A('flip', 0.56), state: { ...base, pills: allTurn90 } },
+    { t: A('flip', 0.78), state: { ...base, pills: allTurn135 } },
+    { t: A('flip', 1.00), state: { ...base, pills: allBack } },
+    { t: A('flipHold', 1.00), state: { ...base, pills: allBack } },
+    // gather into the square (as backs), then spin, then settle
+    { t: A('gather', 1.00), state: { ...base, pills: allBack } },
+    { t: A('orbit', 1.00), state: { ...base, pills: allBack } },
+    { t: A('settle', 1.00), state: { ...base, pills: allBack } },
+    { t: A('crumbleHold', 1.00), state: { ...base, pills: allBack } },
+    // TOP explodes
+    { t: A('crumble', 0.00), state: { ...base, pills: allBack,   crumbleSlot: CRUMBLE, crumble: 0 } },
+    { t: A('crumble', 1.00), state: { ...base, pills: allBackNo, crumbleSlot: CRUMBLE, crumble: 1 } },
+    // SIDES reveal immediately (before the chosen moves), then ding · ding · ding
+    { t: A('reveal', 1.00), state: { ...base, pills: arenaReveal } },
+    { t: A('revealHold', 0.12), state: { ...base, pills: arenaReveal } },
+    { t: A('revealHold', 0.22), state: { ...base, pills: arenaPop } },     // ding 1
+    { t: A('revealHold', 0.32), state: { ...base, pills: arenaReveal } },
+    { t: A('revealHold', 0.42), state: { ...base, pills: arenaPop } },     // ding 2
+    { t: A('revealHold', 0.52), state: { ...base, pills: arenaReveal } },
+    { t: A('revealHold', 0.62), state: { ...base, pills: arenaPop } },     // ding 3
+    { t: A('revealHold', 0.72), state: { ...base, pills: arenaReveal } },
+    { t: A('revealHold', 1.00), state: { ...base, pills: arenaReveal } },
+    // chosen (bottom) descends into the tube as a silhouette; the 2 side pills remain face-out
+    { t: A('descend', 1.00), state: tube() },
+    // two-attempt door (motion computed in computeStateSequential)
+    { t: A('door1Push', 1.00), state: tube() },
+    { t: A('door1Recoil', 1.00), state: tube() },
+    { t: A('door2Push', 1.00), state: tube() },
+    // through → ball (bursts out as a hidden back), holds, then turns + firework
+    { t: A('through', 1.00), state: pop(REVEAL_CY, 180, 0) },
+    { t: A('goalHold', 1.00), state: pop(REVEAL_CY, 180, 0) },
+    { t: A('flipReveal', 0.55), state: pop(REVEAL_CY, orient, 0.55) },
+    { t: A('flipReveal', 1.00), state: pop(REVEAL_CY, orient, 0.82, endPill) },
+    { t: A('endHold', 1.00), state: pop(REVEAL_CY, orient, 1, endPill) },
+  ];
+  return kf.filter(k => k && k.t !== undefined);
+}
+
+function computeStateSequential(kf, EXIT_SLOT, t) {
+  if (currentBranch === 'trial0') return computeStateSeqIntro(kf, EXIT_SLOT, t);
+  if (seqMovieIsTrial) return computeStateSeqTrial(kf, EXIT_SLOT, t);
+  const P = PH_SEQ;
+  let state = stateAtTime(kf, t);
+  { const BY = REVEAL_CY + 60;
+    state = { ...state, ballX: REVEAL_CX, ballY: t < P.through.t0 ? BY + 12 : BY - 12, doorFrac: 0 }; }
+  if (t < P.flip.t0) return state;
+
+  const CX = ARENA_CX, CY = ARENA_CY, R = ANIM.orbit.radius, D2R = Math.PI / 180;
+  const OCY = ARENA_CY - ANIM.orbit.lift;
+  const posAt = deg => ({ x: CX + R * Math.cos(deg * D2R), y: OCY + R * Math.sin(deg * D2R) });
+  const slotX = [-180, -105, 105, 180].map(d => CX + d);
+  const baseAng = [180, 270, 90, 0];                          // slot0→bottom, 1→left, 2→right, 3→top after spin
+  const totalSpin = ANIM.orbit.turns * 360 + (((90 - baseAng[EXIT_SLOT]) % 360) + 360) % 360;
+  const finalDeg = i => baseAng[i] + totalSpin;
+  const REST = TUBE_TOP - 41.5;
+  const descY = tt => { const y0 = OCY + R; const u = Math.min(1, Math.max(0, (tt - P.descend.t0) / P.descend.dur)); return y0 + (REST - y0) * u * u; };
+  // Two-attempt door: extra downward push (dy) past REST + how hard the door bows.
+  // attempt 1 pushes, fails, recoils UP; attempt 2 pushes harder and the door opens.
+  const PUSH = 12;
+  function doorStage(tt) {
+    if (tt < P.door1Push.t0) return { dy: 0, bend: 0, frac: 0 };
+    if (tt < P.door1Push.t1) { const u = (tt - P.door1Push.t0) / P.door1Push.dur; const e = Math.sin(Math.PI / 2 * u); return { dy: PUSH * e, bend: e, frac: 0 }; }
+    if (tt < P.door1Recoil.t1) { const u = (tt - P.door1Recoil.t0) / P.door1Recoil.dur;
+      // from +PUSH down through 0 up to a small bounce, then settle to REST
+      const dy = u < 0.5 ? lerp(PUSH, -10, easeInOut(u / 0.5)) : lerp(-10, 0, (u - 0.5) / 0.5);
+      return { dy, bend: Math.max(0, PUSH ? (1 - Math.min(1, u * 2)) : 0), frac: 0 }; }
+    if (tt < P.door2Push.t1) { const u = (tt - P.door2Push.t0) / P.door2Push.dur; const e = Math.sin(Math.PI / 2 * Math.min(1, u * 1.05));
+      return { dy: PUSH * e, bend: Math.min(1, u * 1.3), frac: u > 0.7 ? (u - 0.7) / 0.3 : 0 }; }
+    return { dy: PUSH, bend: 1, frac: 1 };
+  }
+  const pillY = tt => (tt < P.descend.t1) ? descY(tt) : REST + doorStage(tt).dy;
+  const posOf = i => {
+    if (t < P.gather.t0) return { x: slotX[i], y: CY };                                  // dance row (flip in place)
+    if (t < P.gather.t1) { const u = easeInOut((t - P.gather.t0) / P.gather.dur); const c = posAt(baseAng[i]); return { x: lerp(slotX[i], c.x, u), y: lerp(CY, c.y, u) }; }
+    if (i === EXIT_SLOT && t >= P.descend.t0) return { x: CX, y: pillY(t) };
+    if (t < P.orbit.t0) return posAt(baseAng[i]);
+    if (t < P.orbit.t1) return posAt(baseAng[i] + totalSpin * easeInOut((t - P.orbit.t0) / P.orbit.dur));
+    return posAt(finalDeg(i));
+  };
+  state = { ...state, pillOffsets: [0, 1, 2, 3].map(i => { const p = posOf(i); return { dx: p.x - slotX[i], dy: p.y - CY }; }) };
+
+  let doorFrac = 0, doorBend = 0;
+  // Descent + door struggle: the chosen pill is the in-tube silhouette. Keep the
+  // arena pill (pillOffsets[EXIT]) and the tube silhouette (tubePillY) locked together.
+  if (t >= P.descend.t0 && t < P.through.t0) {
+    const y = pillY(t);
+    if (y >= TUBE_TOP - PILL_DRAW_H * 0.62) {
+      state = { ...state, revealedPill: 'silhouette', tubePillY: y, tubeBulge: 3, tubeTaper: PILL_DRAW_H / 2 };
+    } else if (state.revealedPill === 'silhouette') {
+      state = { ...state, revealedPill: null };
+    }
+    if (y - PILL_DRAW_H / 2 < TUBE_TOP && state.pills && !state.pills[EXIT_SLOT]) {
+      const pills2 = state.pills.slice(); pills2[EXIT_SLOT] = { kind: STARTING[EXIT_SLOT], rot: 180 };
+      const offs2 = state.pillOffsets.slice(); offs2[EXIT_SLOT] = { dx: CX - slotX[EXIT_SLOT], dy: y - CY };
+      state = { ...state, pills: pills2, pillOffsets: offs2 };
+    }
+    const ds = doorStage(t); doorBend = ds.bend; doorFrac = ds.frac;
+  }
+  // After the pill is through, the door stays open.
+  if (t >= P.through.t0) doorFrac = 1;
+  state = { ...state, doorFrac, doorBend };
+  return state;
+}
+
+// Familiarization demo: pills stay FACE-UP the whole time (no hidden identity),
+// do the full dance, spin while visible, settle into a flat 2×2 (2 yellow left /
+// 2 red right), then the winning colour slides over the tube, descends, fights the
+// door over two attempts, and gets the ball with a firework. trial1 = yellow wins,
+// trial2 = red wins.
+const TRIAL_WINNER = { trial1: 0, trial2: 2 };           // slot 0 = a yellow, slot 2 = a red
+function buildKeyframesSeqTrial(branchKey) {
+  const WIN = TRIAL_WINNER[branchKey] != null ? TRIAL_WINNER[branchKey] : 0;
+  const A = atST;
+  const pills = ['happy', 'happy', 'angry', 'angry'];     // yellows 0,1 (left col) · reds 2,3 (right col)
+  const winKind = pills[WIN];
+  const allFace = pills.map(k => ({ kind: k, rot: 0 }));
+  const others  = allFace.map((p, i) => i === WIN ? null : p);   // arena after the winner leaves
+  const zero = pills.map(() => ({ dx: 0, dy: 0 }));
+  const base = { pills: allFace, revealedPill: null, shakeX: 0, fireworks: 0, burst: 0,
+                 yellowDx: 0, yellowDy: 0, yellowScaleX: 1, yellowScaleY: 1,
+                 redDx: 0, redDy: 0, redScaleX: 1, redScaleY: 1, redTilt: 0, pillOffsets: zero };
+  const REST = TUBE_TOP - 41.5;
+  // winner drawn ON TOP as a face (rot 0) for slide-in → descent → door → ball
+  const win = (y, burst = 0, extra) => ({ ...base, pills: others, revealedPill: winKind,
+    exitY: y, exitRot: 0, tubePillY: y, tubePillScaleX: 1, tubePillScaleY: 1, tubeBulge: 0, tubeTaper: 56,
+    fireworks: 0, burst, ...extra });
+  const kf = [
+    { t: A('introSettle', 0), state: { ...base } },
+    { t: A('introSettle', 1), state: { ...base } },
+    // FULL yellow dance (sway + yay)
+    { t: A('yellowDance', 0.00), state: { ...base } },
+    { t: A('yellowDance', 0.12), state: { ...base, yellowDx:  8, yellowDy: -42, yellowTilt:  5 } },
+    { t: A('yellowDance', 0.24), state: { ...base, yellowDx: 14, yellowDy:  2,  yellowTilt: 10, yellowScaleX: 1.08, yellowScaleY: 0.91 } },
+    { t: A('yellowDance', 0.36), state: { ...base, yellowDx:  6, yellowDy: -22, yellowTilt:  4 } },
+    { t: A('yellowDance', 0.48), state: { ...base, yellowDy: 1 } },
+    { t: A('yellowDance', 0.60), state: { ...base, yellowDx: -8, yellowDy: -42, yellowTilt: -5 } },
+    { t: A('yellowDance', 0.72), state: { ...base, yellowDx:-14, yellowDy:  2,  yellowTilt:-10, yellowScaleX: 1.08, yellowScaleY: 0.91 } },
+    { t: A('yellowDance', 0.84), state: { ...base, yellowDx: -6, yellowDy: -22, yellowTilt: -4 } },
+    { t: A('yellowDance', 0.96), state: { ...base, yellowDy: 1 } },
+    { t: A('yellowDance', 1.00), state: { ...base } },
+    { t: A('yellowJump', 0.44), state: { ...base, yellowScaleX: 1.12, yellowScaleY: 0.85, yellowDy: 8 } },
+    { t: A('yellowJump', 0.66), state: { ...base, yellowScaleX: 0.88, yellowScaleY: 1.16, yellowDy: -70 } },
+    { t: A('yellowJump', 0.84), state: { ...base, yellowScaleX: 1.12, yellowScaleY: 0.85, yellowDy: 6 } },
+    { t: A('yellowJump', 1.00), state: { ...base } },
+    { t: A('beat', 1.00), state: { ...base } },
+    // FULL red dance (shudder + chest bump)
+    { t: A('redDance', 0.00), state: { ...base } },
+    { t: A('redDance', 0.11), state: { ...base, redDx: -7, redTilt: -5, redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: A('redDance', 0.23), state: { ...base, redDx: -7, redTilt: -5, redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: A('redDance', 0.35), state: { ...base, redDx: -7, redTilt: -5, redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: A('redDance', 0.47), state: { ...base, redDx: -7, redTilt: -5, redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: A('redDance', 0.59), state: { ...base, redDx: -7, redTilt: -5, redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: A('redDance', 0.71), state: { ...base, redDx:  7, redTilt:  5, redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: A('redDance', 0.83), state: { ...base, redDx: -7, redTilt: -5, redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: A('redDance', 0.95), state: { ...base, redDx:  0, redTilt:  0 } },
+    { t: A('redDance', 1.00), state: { ...base } },
+    { t: A('redShake', 0.00), state: { ...base, redScaleX: 1.03, redScaleY: 0.97 } },
+    { t: A('redShake', 0.28), state: { ...base, redScaleX: 1.08, redScaleY: 0.90, pillOffsets: [zero[0], zero[1], { dx: -12, dy: 4 }, { dx: 12, dy: 4 }] } },
+    { t: A('redShake', 0.52), state: { ...base, redScaleX: 0.82, redScaleY: 1.18, pillOffsets: [zero[0], zero[1], { dx: 17, dy: -22 }, { dx: -17, dy: -22 }] } },
+    { t: A('redShake', 0.65), state: { ...base, redScaleX: 1.07, redScaleY: 0.92, pillOffsets: [zero[0], zero[1], { dx: 7, dy: 2 }, { dx: -7, dy: 2 }] } },
+    { t: A('redShake', 1.00), state: { ...base } },
+    { t: A('dancesDone', 1.00), state: { ...base } },
+    { t: A('premixPause', 1.00), state: { ...base } },
+    // gather + spin while FULLY VISIBLE (no flip), settle into the flat 2×2
+    { t: A('gather', 1.00), state: { ...base } },
+    { t: A('orbit', 1.00), state: { ...base } },
+    { t: A('settle', 1.00), state: { ...base } },
+    { t: A('pickPause', 1.00), state: { ...base } },
+    // the winning colour slides over the tube, then descends (face up)
+    { t: A('slideIn', 1.00), state: win(REST) },
+    { t: A('descend', 1.00), state: win(REST) },
+    { t: A('door1Push', 1.00), state: win(REST) },
+    { t: A('door1Recoil', 1.00), state: win(REST) },
+    { t: A('door2Push', 1.00), state: win(REST) },
+    { t: A('through', 1.00), state: win(REVEAL_CY) },
+    { t: A('goalHold', 1.00), state: win(REVEAL_CY, 0.45) },     // gets the ball → firework
+    { t: A('endHold', 1.00), state: win(REVEAL_CY, 1) },
+  ];
+  return kf.filter(k => k && k.t !== undefined);
+}
+
+function computeStateSeqTrial(kf, EXIT_SLOT, t) {
+  const P = PH_SEQ_TRIAL;
+  const WIN = TRIAL_WINNER[currentBranch] != null ? TRIAL_WINNER[currentBranch] : 0;
+  let state = stateAtTime(kf, t);
+  { const BY = REVEAL_CY + 60;
+    state = { ...state, ballX: REVEAL_CX, ballY: t < P.through.t0 ? BY + 12 : BY - 12, doorFrac: 0 }; }
+  if (t < P.gather.t0) return state;
+
+  const CX = ARENA_CX, CY = ARENA_CY, R = ANIM.orbit.radius, D2R = Math.PI / 180;
+  const OCY = ARENA_CY - ANIM.orbit.lift;
+  const posAt = deg => ({ x: CX + R * Math.cos(deg * D2R), y: OCY + R * Math.sin(deg * D2R) });
+  const slotX = [-180, -105, 105, 180].map(d => CX + d);
+  const baseAng = [180, 270, 90, 0];
+  const totalSpin = ANIM.orbit.turns * 360;                    // whole turns → lands back where it started
+  // flat 2×2 grid: slots 0,1 = left column (yellows), 2,3 = right column (reds)
+  const GX = 78, GY = 52;
+  const grid = [ { x: CX - GX, y: OCY - GY }, { x: CX - GX, y: OCY + GY }, { x: CX + GX, y: OCY - GY }, { x: CX + GX, y: OCY + GY } ];
+  const REST = TUBE_TOP - 41.5;
+  const PUSH = 12;
+  function doorStage(tt) {
+    if (tt < P.door1Push.t0) return { dy: 0, bend: 0, frac: 0 };
+    if (tt < P.door1Push.t1) { const u = (tt - P.door1Push.t0) / P.door1Push.dur; const e = Math.sin(Math.PI / 2 * u); return { dy: PUSH * e, bend: e, frac: 0 }; }
+    if (tt < P.door1Recoil.t1) { const u = (tt - P.door1Recoil.t0) / P.door1Recoil.dur; const dy = u < 0.5 ? lerp(PUSH, -10, easeInOut(u / 0.5)) : lerp(-10, 0, (u - 0.5) / 0.5); return { dy, bend: Math.max(0, 1 - Math.min(1, u * 2)), frac: 0 }; }
+    if (tt < P.door2Push.t1) { const u = (tt - P.door2Push.t0) / P.door2Push.dur; const e = Math.sin(Math.PI / 2 * Math.min(1, u * 1.05)); return { dy: PUSH * e, bend: Math.min(1, u * 1.3), frac: u > 0.7 ? (u - 0.7) / 0.3 : 0 }; }
+    return { dy: PUSH, bend: 1, frac: 1 };
+  }
+  const descY = tt => { const y0 = OCY + R; const u = Math.min(1, Math.max(0, (tt - P.descend.t0) / P.descend.dur)); return y0 + (REST - y0) * u * u; };
+  // settled position of slot i (after the orbit lands into the 2×2 grid)
+  const settledOf = i => {
+    if (t < P.orbit.t1) return posAt(baseAng[i] + totalSpin * easeInOut((t - P.orbit.t0) / P.orbit.dur));
+    if (t < P.settle.t1) { const u = easeInOut((t - P.settle.t0) / P.settle.dur); const c = posAt(baseAng[i] + totalSpin); return { x: lerp(c.x, grid[i].x, u), y: lerp(c.y, grid[i].y, u) }; }
+    return grid[i];
+  };
+  const posOf = i => {
+    if (t < P.gather.t1) { const u = easeInOut((t - P.gather.t0) / P.gather.dur); const c = posAt(baseAng[i]); return { x: lerp(slotX[i], c.x, u), y: lerp(CY, c.y, u) }; }
+    if (t < P.orbit.t0) return posAt(baseAng[i]);
+    return settledOf(i);
+  };
+  state = { ...state, pillOffsets: [0, 1, 2, 3].map(i => { const p = posOf(i); return { dx: p.x - slotX[i], dy: p.y - CY }; }) };
+
+  // The winning pill: slides from its grid cell to the tube, then descends + fights the door.
+  let doorFrac = 0, doorBend = 0;
+  if (t >= P.slideIn.t0) {
+    let wy;
+    if (t < P.slideIn.t1) { const u = easeInOut((t - P.slideIn.t0) / P.slideIn.dur); const g = grid[WIN]; wy = lerp(g.y, OCY + R, u); }
+    else if (t < P.descend.t1) wy = descY(t);
+    else { const ds = doorStage(t); wy = REST + ds.dy; doorBend = ds.bend; doorFrac = ds.frac; }
+    let wx = CX;
+    if (t < P.slideIn.t1) { const u = easeInOut((t - P.slideIn.t0) / P.slideIn.dur); wx = lerp(grid[WIN].x, CX, u); }
+    state = { ...state, exitY: wy, exitX: wx, exitRot: 0, tubePillY: wy };
+  }
+  if (t >= P.through.t0) doorFrac = 1;
+  state = { ...state, doorFrac, doorBend };
+  return state;
+}
+
+// Shared full-dance keyframes (introSettle → premixPause) for the seq trials.
+// `A` is the timeline's `at` function; base/zero come from the caller.
+function seqFullDanceKF(A, base, zero) {
+  return [
+    { t: A('introSettle', 0), state: { ...base } },
+    { t: A('introSettle', 1), state: { ...base } },
+    { t: A('yellowDance', 0.00), state: { ...base } },
+    { t: A('yellowDance', 0.12), state: { ...base, yellowDx:  8, yellowDy: -42, yellowTilt:  5 } },
+    { t: A('yellowDance', 0.24), state: { ...base, yellowDx: 14, yellowDy:  2,  yellowTilt: 10, yellowScaleX: 1.08, yellowScaleY: 0.91 } },
+    { t: A('yellowDance', 0.36), state: { ...base, yellowDx:  6, yellowDy: -22, yellowTilt:  4 } },
+    { t: A('yellowDance', 0.48), state: { ...base, yellowDy: 1 } },
+    { t: A('yellowDance', 0.60), state: { ...base, yellowDx: -8, yellowDy: -42, yellowTilt: -5 } },
+    { t: A('yellowDance', 0.72), state: { ...base, yellowDx:-14, yellowDy:  2,  yellowTilt:-10, yellowScaleX: 1.08, yellowScaleY: 0.91 } },
+    { t: A('yellowDance', 0.84), state: { ...base, yellowDx: -6, yellowDy: -22, yellowTilt: -4 } },
+    { t: A('yellowDance', 0.96), state: { ...base, yellowDy: 1 } },
+    { t: A('yellowDance', 1.00), state: { ...base } },
+    { t: A('yellowJump', 0.44), state: { ...base, yellowScaleX: 1.12, yellowScaleY: 0.85, yellowDy: 8 } },
+    { t: A('yellowJump', 0.66), state: { ...base, yellowScaleX: 0.88, yellowScaleY: 1.16, yellowDy: -70 } },
+    { t: A('yellowJump', 0.84), state: { ...base, yellowScaleX: 1.12, yellowScaleY: 0.85, yellowDy: 6 } },
+    { t: A('yellowJump', 1.00), state: { ...base } },
+    { t: A('beat', 1.00), state: { ...base } },
+    { t: A('redDance', 0.00), state: { ...base } },
+    { t: A('redDance', 0.11), state: { ...base, redDx: -7, redTilt: -5, redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: A('redDance', 0.23), state: { ...base, redDx:  7, redTilt:  5, redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: A('redDance', 0.35), state: { ...base, redDx: -7, redTilt: -5, redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: A('redDance', 0.47), state: { ...base, redDx:  7, redTilt:  5, redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: A('redDance', 0.59), state: { ...base, redDx: -7, redTilt: -5, redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: A('redDance', 0.71), state: { ...base, redDx:  7, redTilt:  5, redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: A('redDance', 0.83), state: { ...base, redDx: -7, redTilt: -5, redScaleX: 1.08, redScaleY: 0.92 } },
+    { t: A('redDance', 0.95), state: { ...base, redDx:  0, redTilt:  0 } },
+    { t: A('redDance', 1.00), state: { ...base } },
+    { t: A('redShake', 0.00), state: { ...base, redScaleX: 1.03, redScaleY: 0.97 } },
+    { t: A('redShake', 0.28), state: { ...base, redScaleX: 1.08, redScaleY: 0.90, pillOffsets: [zero[0], zero[1], { dx: -12, dy: 4 }, { dx: 12, dy: 4 }] } },
+    { t: A('redShake', 0.52), state: { ...base, redScaleX: 0.82, redScaleY: 1.18, pillOffsets: [zero[0], zero[1], { dx: 17, dy: -22 }, { dx: -17, dy: -22 }] } },
+    { t: A('redShake', 0.65), state: { ...base, redScaleX: 1.07, redScaleY: 0.92, pillOffsets: [zero[0], zero[1], { dx: 7, dy: 2 }, { dx: -7, dy: 2 }] } },
+    { t: A('redShake', 1.00), state: { ...base } },
+    { t: A('dancesDone', 1.00), state: { ...base } },
+    { t: A('premixPause', 1.00), state: { ...base } },
+  ];
+}
+
+// INTRO demo (trial0): dance → flip to backs → shuffle (orbit) → flip back → land
+// rearranged. No descent/ball. Teaches the turn-around + shuffle mechanism.
+function buildKeyframesSeqIntro(branchKey) {
+  const A = atSI;
+  const pills = ['happy', 'happy', 'angry', 'angry'];
+  const allFace = pills.map(k => ({ kind: k, rot: 0 }));
+  const allBack = pills.map(k => ({ kind: k, rot: 180 }));
+  const allTurn45  = pills.map(k => ({ kind: k, rot: 45 }));
+  const allTurn90  = pills.map(k => ({ kind: k, rot: 90 }));
+  const allTurn135 = pills.map(k => ({ kind: k, rot: 135 }));
+  const zero = pills.map(() => ({ dx: 0, dy: 0 }));
+  const base = { pills: allFace, revealedPill: null, shakeX: 0, fireworks: 0, burst: 0,
+                 yellowDx: 0, yellowDy: 0, yellowScaleX: 1, yellowScaleY: 1,
+                 redDx: 0, redDy: 0, redScaleX: 1, redScaleY: 1, redTilt: 0, pillOffsets: zero };
+  const kf = [
+    ...seqFullDanceKF(A, base, zero),
+    { t: A('gather', 1.00), state: { ...base } },                              // faces, in the diamond
+    // flip to BACKS in place
+    { t: A('flip', 0.10), state: { ...base } },
+    { t: A('flip', 0.34), state: { ...base, pills: allTurn45 } },
+    { t: A('flip', 0.56), state: { ...base, pills: allTurn90 } },
+    { t: A('flip', 0.78), state: { ...base, pills: allTurn135 } },
+    { t: A('flip', 1.00), state: { ...base, pills: allBack } },
+    { t: A('flipHold', 1.00), state: { ...base, pills: allBack } },
+    { t: A('orbit', 1.00), state: { ...base, pills: allBack } },               // shuffle
+    { t: A('settle', 1.00), state: { ...base, pills: allBack } },
+    // flip BACK to faces (now rearranged)
+    { t: A('flipBack', 0.10), state: { ...base, pills: allBack } },
+    { t: A('flipBack', 0.34), state: { ...base, pills: allTurn135 } },
+    { t: A('flipBack', 0.56), state: { ...base, pills: allTurn90 } },
+    { t: A('flipBack', 0.78), state: { ...base, pills: allTurn45 } },
+    { t: A('flipBack', 1.00), state: { ...base, pills: allFace } },
+    { t: A('revealHold', 1.00), state: { ...base, pills: allFace } },
+    { t: A('endHold', 1.00), state: { ...base, pills: allFace } },
+  ];
+  return kf.filter(k => k && k.t !== undefined);
+}
+
+function computeStateSeqIntro(kf, EXIT_SLOT, t) {
+  const P = PH_SEQ_INTRO;
+  let state = stateAtTime(kf, t);
+  { const BY = REVEAL_CY + 60; state = { ...state, ballX: REVEAL_CX, ballY: BY + 12, doorFrac: 0 }; }
+  if (t < P.gather.t0) return state;
+  const CX = ARENA_CX, CY = ARENA_CY, R = ANIM.orbit.radius, D2R = Math.PI / 180;
+  const OCY = ARENA_CY - ANIM.orbit.lift;
+  const posAt = deg => ({ x: CX + R * Math.cos(deg * D2R), y: OCY + R * Math.sin(deg * D2R) });
+  const slotX = [-180, -105, 105, 180].map(d => CX + d);
+  const baseAng = [180, 270, 90, 0];
+  const totalSpin = ANIM.orbit.turns * 360 + 90;                              // extra quarter turn → land in NEW spots
+  const posOf = i => {
+    if (t < P.gather.t1) { const u = easeInOut((t - P.gather.t0) / P.gather.dur); const c = posAt(baseAng[i]); return { x: lerp(slotX[i], c.x, u), y: lerp(CY, c.y, u) }; }
+    if (t < P.orbit.t0) return posAt(baseAng[i]);
+    if (t < P.orbit.t1) return posAt(baseAng[i] + totalSpin * easeInOut((t - P.orbit.t0) / P.orbit.dur));
+    return posAt(baseAng[i] + totalSpin);
+  };
+  state = { ...state, pillOffsets: [0, 1, 2, 3].map(i => { const p = posOf(i); return { dx: p.x - slotX[i], dy: p.y - CY }; }) };
   return state;
 }
 
@@ -2361,26 +3436,38 @@ const playPauseBtn = document.getElementById('modal-playpause');
 function syncPlayBtn() { if (playPauseBtn) playPauseBtn.innerHTML = playing ? '&#x23f8;' : '&#x25b6;'; }
 scrub.max = DURATION; scrub.step = 1 / FPS;
 
+// ---- Reveal-zone banner -------------------------------------------------
+// A small cloth strung between two planted stakes that covers the dispensed
+// pill's top two-thirds (its identity), leaving the universal suit/tie (the
 let curT = 0;
 function renderFrame(t) {
   t = curT = Math.max(0, Math.min(modeDuration(), t));
-  drawScene((lotteryMode === 'occlusion' ? computeStateRandom : computeState)(curKf, curExit, t));
+  const computeFn = lotteryMode === 'occlusion' ? computeStateRandom
+                  : lotteryMode === 'seq' ? computeStateSequential : computeState;
+  drawScene(computeFn(curKf, curExit, t));
   scrub.value = t;
 }
 
 function playAnimation(branchKey, startAt = 0) {
   const cfg = CFG[branchKey] || CFG.visual;
+  // Familiarization trials are inherently the Sequential presentation — force it so
+  // they play correctly no matter which mode the Classic/Sequential toggle is on.
+  if (branchKey === 'trial0' || branchKey === 'trial1' || branchKey === 'trial2') setLotteryMode('seq');
+  currentBranch = branchKey;                          // set before seqIsTrial()/keyframe build
   if (lotteryMode === 'occlusion') {
     const rmap = rPrepare(branchKey);
     curKf = buildKeyframesRandom(branchKey, rmap); curExit = rmap.chosen;
     ensureCollBuffer();
+    rPrevPairContact = {};
+  } else if (lotteryMode === 'seq') {
+    seqMovieIsTrial = (branchKey === 'trial1' || branchKey === 'trial2');
+    curKf = buildKeyframesSequential(branchKey); curExit = 0;
   } else {
     curKf = buildKeyframes(branchKey); curExit = cfg.exitSlot;
   }
-  currentBranch = branchKey;
   scrub.max = modeDuration();
   syncSeedBar();                                     // show/refresh the seed selector
-  const modeLabel = lotteryMode === 'occlusion' ? 'Occlusion' : 'Spinning Lottery';
+  const modeLabel = lotteryMode === 'occlusion' ? 'Occlusion' : lotteryMode === 'seq' ? 'Sequential' : 'Spinning Lottery';
   document.getElementById('modal-title').textContent = `${TITLES[branchKey] || 'Animation'} · ${modeLabel}`;
   document.getElementById('modal-card').style.setProperty('--c', COLORS[branchKey] || '#5a4f44');
   document.getElementById('modal-backdrop').classList.add('open');
@@ -2412,9 +3499,14 @@ function togglePlay() { setPlaying(!playing); }
 function tick(now) {
   const t = (now - startTime) / 1000;
   scanSounds(audioPrevT, t);
-  if (soundOn && lotteryMode === 'occlusion' && rState.sim) {
-    for (const ct of rState.sim.collisions) {
-      if (ct > audioPrevT && ct <= t) playCollisionWA();
+  if (soundOn && lotteryMode === 'occlusion' && rState.sim && t >= rState.sim.T0 && t <= PH_R.occIn.t1) {
+    const pos = rSample(rState.sim, t);
+    for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++) {
+      const c = capsuleContact(pos[i].x, pos[i].y, pos[j].x, pos[j].y);
+      const key = i + '-' + j;
+      const inContact = c.D < 2 * c.RH * R_COLL_PAD;
+      if (inContact && !rPrevPairContact[key]) playCollisionWA();
+      rPrevPairContact[key] = inContact;
     }
   }
   audioPrevT = t;                                   // fire any beat-start cues crossed this frame
@@ -2431,6 +3523,9 @@ function closeAnimation() {
 }
 window.playAnimation = playAnimation;
 window.closeAnimation = closeAnimation;
+
+// Headless hook (render harness): force the presentation mode before playAnimation.
+window.__setMode = (m) => setLotteryMode(m);
 
 // Capture play state before drag so we can restore it on release.
 let wasScrubPlaying = false;
@@ -2471,6 +3566,7 @@ const SOUND_CANDIDATES = {
   vibrate: ['vibrate.mp3'],
   revealChime: ['reveal_combo.mp3'],
   collision: ['pill_collision.mp3'],
+  crumble: ['crumble.mp3'],
 };
 // Which TIMELINE beat fires each cue, and how. 'loop' plays across [t0,t1].
 // The dance sequences are pre-mixed (music + vocal), fired once at the dance start;
@@ -2486,9 +3582,13 @@ const SOUND_CUES = [
   { cue: 'ding',     beat: 'revealHold', offset: 1.31, type: 'oneshot', desc: 'POP 3 (both pills) — ding (ALL conditions)' },
   { cue: 'flip',     beat: 'rehide',      type: 'oneshot', desc: 'Flip whoosh — pills flip back to hidden' },
   { cue: 'tubeSlide', beat: 'exit',       type: 'oneshot', desc: 'Slide whistle: pill into + down the tube (2.2s)' },
+  { cue: 'vibratePulse', beat: 'pulse1', type: 'oneshot', desc: 'Pulse 1 — brief buzz in tube before reveal' },
+  { cue: 'vibratePulse', beat: 'pulse2', type: 'oneshot', desc: 'Pulse 2 — brief buzz in tube before reveal' },
   { cue: 'vibrate',  beat: 'preSpit',  type: 'oneshot', desc: 'Vibration rattle (2.5s, cartoon hollow object) — matches the preSpit shake, builds to the pop' },
-  { cue: 'pop',      beat: 'spit',        type: 'oneshot', desc: 'Tube snaps the pill out' },
-  { cue: 'revealChime', beat: 'dispense', type: 'oneshot', desc: 'Identity reveal chime + firework' },
+  { cue: 'pop',      beat: 'spit',        type: 'oneshot', desc: 'Tube snaps the pill out (burst-out — both variants)' },
+  { cue: 'revealChime', beat: 'dispense', type: 'oneshot', variant: 'instant', desc: 'Identity reveal chime + firework (INSTANT variant — at the spit)' },
+  { cue: 'revealChime', beat: 'spit', offset: 1.0, type: 'oneshot', variant: 'delayed', desc: 'Identity reveal chime + firework, 1s after the burst-out (DELAYED variant)' },
+  { cue: 'crumble',    beat: 'crumble',  type: 'oneshot', desc: 'Pill disintegrates into dust — fires at the first frame of the crumble' },
 ];
 // Random-lottery cues: same clips, no orbit whoosh; the flip whistle now fires on
 // the turn-in-place (rTurn). The tail (slide whistle, ding ×3, vibrate, pop, chime)
@@ -2507,16 +3607,56 @@ const SOUND_CUES_RANDOM = [
   { cue: 'pop',      beat: 'spit',        type: 'oneshot' },
   { cue: 'revealChime', beat: 'dispense', offset: -0.22, type: 'oneshot' },
 ];
-const modeCues = () => lotteryMode === 'occlusion' ? SOUND_CUES_RANDOM : SOUND_CUES;
-const modePH   = () => lotteryMode === 'occlusion' ? PH_R : PH;
+// SEQUENTIAL mode cues. `clipStart` plays a clip from a mid-point (used to drop the
+// dance music and keep only the vocal, which sits at ~1.9s in seq_happy/seq_angry).
+const SOUND_CUES_SEQ = [
+  { cue: 'happySeq', beat: 'yellowJump', clipStart: 1.9, type: 'oneshot' },   // "yay" only (music trimmed)
+  { cue: 'angrySeq', beat: 'redShake',   clipStart: 1.9, type: 'oneshot' },   // "hmm" only (music trimmed)
+  { cue: 'flip',     beat: 'flip',  offset: 0.2, type: 'oneshot' },           // flip to backs
+  { cue: 'orbit',    beat: 'orbit',       type: 'oneshot' },                  // spin whoosh
+  { cue: 'crumble',  beat: 'crumble',     type: 'oneshot' },                  // TOP explodes
+  { cue: 'flip',     beat: 'reveal',      type: 'oneshot' },                  // sides flip face-out
+  { cue: 'ding',     beat: 'revealHold', offset: 0.50, type: 'oneshot' },
+  { cue: 'ding',     beat: 'revealHold', offset: 0.96, type: 'oneshot' },
+  { cue: 'ding',     beat: 'revealHold', offset: 1.42, type: 'oneshot' },
+  { cue: 'tubeSlide', beat: 'descend',    type: 'oneshot' },                  // slide whistle
+  { cue: 'collision', beat: 'door1Push', offset: 0.30, type: 'oneshot' },     // thud — attempt 1 fails
+  { cue: 'collision', beat: 'door2Push', offset: 0.30, type: 'oneshot' },     // thud — attempt 2
+  { cue: 'pop',      beat: 'through',     type: 'oneshot' },                  // bursts through to the ball
+  { cue: 'revealChime', beat: 'flipReveal', type: 'oneshot' },               // turns + firework + chime
+];
+const SOUND_CUES_SEQ_TRIAL = [
+  { cue: 'happySeq', beat: 'yellowDance', type: 'oneshot' },                  // full dance kept for the demo
+  { cue: 'angrySeq', beat: 'redDance',    type: 'oneshot' },
+  { cue: 'orbit',    beat: 'orbit',       type: 'oneshot' },
+  { cue: 'tubeSlide', beat: 'descend',    type: 'oneshot' },
+  { cue: 'collision', beat: 'door1Push', offset: 0.30, type: 'oneshot' },
+  { cue: 'collision', beat: 'door2Push', offset: 0.30, type: 'oneshot' },
+  { cue: 'pop',      beat: 'through',     type: 'oneshot' },
+  { cue: 'revealChime', beat: 'goalHold', offset: 0.10, type: 'oneshot' },    // gets the ball + firework
+];
+const SOUND_CUES_SEQ_INTRO = [
+  { cue: 'happySeq', beat: 'yellowDance', type: 'oneshot' },
+  { cue: 'angrySeq', beat: 'redDance',    type: 'oneshot' },
+  { cue: 'flip',     beat: 'flip',    offset: 0.2, type: 'oneshot' },         // flip to backs
+  { cue: 'orbit',    beat: 'orbit',       type: 'oneshot' },                  // shuffle whoosh
+  { cue: 'flip',     beat: 'flipBack', offset: 0.2, type: 'oneshot' },        // flip back to faces
+];
+const modeCues = () => lotteryMode === 'occlusion' ? SOUND_CUES_RANDOM
+                     : lotteryMode === 'seq' ? (seqIsIntro() ? SOUND_CUES_SEQ_INTRO : seqIsTrial() ? SOUND_CUES_SEQ_TRIAL : SOUND_CUES_SEQ)
+                     : SOUND_CUES;
+const modePH   = () => lotteryMode === 'occlusion' ? PH_R
+                     : lotteryMode === 'seq' ? (seqIsIntro() ? PH_SEQ_INTRO : seqIsTrial() ? PH_SEQ_TRIAL : PH_SEQ)
+                     : PH;
 const SOUND_DEFAULTS = { happySeq: 'seq_happy.mp3', angrySeq: 'seq_angry.mp3',
-  orbit: 'whoosh_orbit_flat.mp3', tubeSlide: 'tube_slide.mp3', pop: 'pop__light0', ding: 'ding.mp3', flip: 'flip.mp3', vibrate: 'vibrate.mp3', revealChime: 'reveal_combo.mp3',
-  collision: 'pill_collision.mp3' };
+  orbit: 'whoosh_orbit_flat.mp3', tubeSlide: 'tube_slide.mp3', pop: 'pop__light0', ding: 'ding.mp3', flip: 'flip.mp3', vibrate: 'vibrate.mp3', vibratePulse: 'vibrate_pulse.mp3', revealChime: 'reveal_combo.mp3',
+  collision: 'pill_collision.mp3', crumble: 'crumble.mp3' };
 const SOUND_MAP = (() => {
   let saved = {}; try { saved = JSON.parse(localStorage.getItem('lotterySoundMap') || '{}'); } catch (e) {}
   return { ...SOUND_DEFAULTS, ...saved };
 })();
 let soundOn = (localStorage.getItem('lotterySoundOn') ?? '1') === '1';
+let soundVolume = parseFloat(localStorage.getItem('lotterySoundVol') ?? '0.5');
 const saveSoundMap = () => { try { localStorage.setItem('lotterySoundMap', JSON.stringify(SOUND_MAP)); } catch (e) {} };
 
 const audioCache = {};
@@ -2539,11 +3679,19 @@ function getAudio(file) {
 }
 function preloadSounds() { for (const k in SOUND_MAP) getAudio(SOUND_MAP[k]); }
 
-function playCue(cue) {
+function playCue(cue, clipStart = 0) {
   if (!soundOn) return;
   if (cue === 'orbit') { playOrbitWA(); return; }   // orbit uses the Web Audio envelope player
   const a = getAudio(SOUND_MAP[cue]); if (!a) return;
-  try { a.loop = false; a.currentTime = 0; a.play().catch(() => {}); } catch (e) {}
+  // Slide whistle plays faster to stay in sync with the quicker pill drop (exit+descent ≈ 1.45s vs the 2.2s clip).
+  // clipStart > 0 starts mid-clip (seq mode trims the dance music, keeping only the vocal at ~1.9s).
+  try { a.loop = false; a.volume = soundVolume; a.playbackRate = (cue === 'tubeSlide') ? 1.5 : 1; a.currentTime = clipStart || 0; a.play().catch(() => {}); } catch (e) {}
+}
+function playCueTimed(cue, dur) {
+  if (!soundOn) return;
+  const a = getAudio(SOUND_MAP[cue]); if (!a) return;
+  try { a.loop = false; a.volume = soundVolume; a.currentTime = 0; a.play().catch(() => {}); } catch (e) {}
+  setTimeout(() => { try { a.pause(); } catch (e) {} }, dur * 1000);
 }
 
 // --- Orbit whoosh: Web Audio so its envelope (start / fade / peak) is applied
@@ -2568,7 +3716,7 @@ function ensureOrbitBuffer() {
 // to `peak`, hold, ramp down over `fade` to silence — clamped to a triangle if
 // the two fades don't fit. t0 is an AudioContext time.
 function applyOrbitEnv(gain, t0) {
-  const T = ORBIT_DUR, start = orbitEnv.start, peak = orbitEnv.peak;
+  const T = ORBIT_DUR, start = orbitEnv.start, peak = orbitEnv.peak * soundVolume;
   let fade = orbitEnv.fade;
   const span = T - start;
   if (2 * fade > span) fade = span / 2;            // collapse plateau → triangle
@@ -2643,13 +3791,15 @@ function scanSounds(a, b) {
   const cues = modeCues(), PHm = modePH();
   for (const c of cues) {
     if (c.branches && !c.branches.includes(currentBranch)) continue;  // condition-gated cue
+    if (c.variant && c.variant !== (DELAYED_REVEAL ? 'delayed' : 'instant')) continue;  // variant-gated cue
     const ph = PHm[c.beat]; if (!ph) continue;
     const fire = ph.t0 + (c.offset || 0);
     if (c.type === 'loop') {
       if (a < fire && b >= fire) startLoop(c.cue);
       if (loopCue === c.cue && b >= ph.t1) stopLoop();
     } else if (a < fire && b >= fire) {
-      playCue(c.cue);
+      if (c.stopAfter) playCueTimed(c.cue, c.stopAfter);
+      else playCue(c.cue, c.clipStart || 0);
     }
   }
 }
@@ -2680,6 +3830,7 @@ function syncAudioToTime(t) {
   if (audioCtx) { for (const k in SOUND_MAP) decodeForSync(SOUND_MAP[k]); }
   for (const c of modeCues()) {
     if (c.branches && !c.branches.includes(currentBranch)) continue;
+    if (c.variant && c.variant !== (DELAYED_REVEAL ? 'delayed' : 'instant')) continue;  // variant-gated cue
     const ph = modePH()[c.beat]; if (!ph) continue;
     const t0 = ph.t0 + (c.offset || 0);
     if (t < t0) continue;                          // hasn't started yet
@@ -2759,20 +3910,6 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { closeAnimation(); return; }
   if (open && (e.key === ' ' || e.code === 'Space')) { e.preventDefault(); togglePlay(); }
 });
-// Lottery-mode selector. The hash deep-link (#random or #random-<seedIdx>) lets
-// the render harness target Random mode and pin a seed for reproducible frames.
-(function initModeToggle() {
-  const tog = document.getElementById('mode-toggle');
-  const h = (location.hash || '').toLowerCase();
-  if (h.includes('occlusion') || h.includes('random')) { const m = h.match(/(?:occlusion|random)-?(\d+)/); setLotteryMode('occlusion', m ? parseInt(m[1], 10) : undefined); }
-  if (tog) tog.addEventListener('click', (e) => {
-    const b = e.target.closest('button[data-mode]'); if (!b) return;
-    if (b.dataset.mode === lotteryMode) return;
-    setLotteryMode(b.dataset.mode);
-    renderTrials();                                   // swap the event-type thumbnails for this mode
-  });
-  syncModeButtons();
-})();
 buildSeedBar();  // populate the modal seed selector
 
 syncPlayBtn();   // initial icon
@@ -2798,18 +3935,20 @@ function flipThumbs(containerSelector) {
 
 function rerenderAll() {
   renderTrials();
+  renderFamStrip();
   renderTrainGroups();
   renderTestStrip();
 
-  requestAnimationFrame(renderConvergeArrows);
+  requestAnimationFrame(renderArrowDiagrams);
 }
 
 function rerenderAllWithFlip() {
   renderTrials();
+  renderFamStrip();
   renderTrainGroups();
   renderTestStrip();
 
-  requestAnimationFrame(renderConvergeArrows);
+  requestAnimationFrame(renderArrowDiagrams);
   requestAnimationFrame(() => {
     flipThumbs('.mini-thumb');
   });
@@ -2889,8 +4028,346 @@ function wireCounterbalance() {
   }
 }
 
+const EXPORT_MOVIES = [
+  { branch: 'visual',      mode: 'spin',      filename: 'Visual__SpinningLottery',                  label: 'Visual\nSpinning Lottery' },
+  { branch: 'baseline',    mode: 'spin',      filename: 'NoDeduction__SpinningLottery',              label: 'No Deduction\nSpinning Lottery' },
+  { branch: 'supports',    mode: 'spin',      filename: 'SupportedByDeduction__SpinningLottery',     label: 'Supported by Deduction\nSpinning Lottery' },
+  { branch: 'contradicts', mode: 'spin',      filename: 'ContradictedByDeduction__SpinningLottery',  label: 'Contradicted by Deduction\nSpinning Lottery' },
+  { branch: 'visual',      mode: 'occlusion', filename: 'Visual__Occlusion',                         label: 'Visual\nOcclusion' },
+  { branch: 'baseline',    mode: 'occlusion', filename: 'NoDeduction__Occlusion',                    label: 'No Deduction\nOcclusion' },
+  { branch: 'supports',    mode: 'occlusion', filename: 'SupportedByDeduction__Occlusion',           label: 'Supported by Deduction\nOcclusion' },
+  { branch: 'contradicts', mode: 'occlusion', filename: 'ContradictedByDeduction__Occlusion',        label: 'Contradicted by Deduction\nOcclusion' },
+  { branch: 'trial0',      mode: 'seq',       filename: 'Familiarization0_Intro__Sequential',        label: 'Familiarization 0 · Intro\nSequential' },
+  { branch: 'trial1',      mode: 'seq',       filename: 'Familiarization1_YellowWins__Sequential',   label: 'Familiarization 1 · Yellow\nSequential' },
+  { branch: 'trial2',      mode: 'seq',       filename: 'Familiarization2_RedWins__Sequential',      label: 'Familiarization 2 · Red\nSequential' },
+  { branch: 'visual',      mode: 'seq',       filename: 'Visual__Sequential',                        label: 'Visual\nSequential' },
+  { branch: 'baseline',    mode: 'seq',       filename: 'NoDeduction__Sequential',                   label: 'No Deduction\nSequential' },
+  { branch: 'supports',    mode: 'seq',       filename: 'SupportedByDeduction__Sequential',          label: 'Supported by Deduction\nSequential' },
+  { branch: 'contradicts', mode: 'seq',       filename: 'ContradictedByDeduction__Sequential',       label: 'Contradicted by Deduction\nSequential' },
+];
+
+const EXPORT_W = 1920, EXPORT_H = 1080, EXPORT_FPS = 60;
+
+function waitForFrames() {
+  return new Promise(resolve => {
+    (function check() { window.framesReady() ? resolve() : setTimeout(check, 80); })();
+  });
+}
+
+// Find the best H.264 codec string this browser's VideoEncoder supports.
+async function pickH264Codec() {
+  const candidates = [
+    'avc1.640033',  // High Profile Level 5.1 — covers 1080p60
+    'avc1.4d0033',  // Main Profile Level 5.1
+    'avc1.420034',  // Baseline Level 5.2
+    'avc1.42002a',  // Baseline Level 4.2 — broadest fallback
+  ];
+  for (const codec of candidates) {
+    try {
+      const r = await VideoEncoder.isConfigSupported({
+        codec, width: EXPORT_W, height: EXPORT_H,
+        framerate: EXPORT_FPS, bitrate: 16_000_000,
+      });
+      if (r.supported) return codec;
+    } catch (_) {}
+  }
+  return 'avc1.42002a';
+}
+
+// ----- Audio export helpers -----
+
+// Shared cache so repeated exports don't re-fetch the same files.
+const _xAudioCache = {};
+let   _xDecodeCtx  = null;
+
+async function _xLoadBuf(url) {
+  if (_xAudioCache[url]) return _xAudioCache[url];
+  if (!_xDecodeCtx) _xDecodeCtx = new AudioContext();
+  try {
+    const resp = await fetch(url);
+    const ab   = await resp.arrayBuffer();
+    const buf  = await _xDecodeCtx.decodeAudioData(ab);
+    _xAudioCache[url] = buf;
+    return buf;
+  } catch (e) {
+    console.warn('[export] failed to load audio:', url, e);
+    return null;
+  }
+}
+
+// Matches applyOrbitEnv but takes absolute OfflineAudioContext times (no currentTime offset).
+function _xApplyOrbitEnv(gain, t0) {
+  const T = ORBIT_DUR, start = orbitEnv.start, peak = orbitEnv.peak;
+  let fade = orbitEnv.fade;
+  const span = T - start;
+  if (2 * fade > span) fade = span / 2;
+  const g = gain.gain;
+  g.cancelScheduledValues(0);
+  g.setValueAtTime(0.0001, t0);
+  g.setValueAtTime(0.0001, t0 + start);
+  g.linearRampToValueAtTime(Math.max(0.0001, peak), t0 + start + fade);
+  g.setValueAtTime(Math.max(0.0001, peak), t0 + Math.max(start + fade, T - fade));
+  g.linearRampToValueAtTime(0.0001, t0 + T);
+}
+
+// Render all sound cues for a given mode into a stereo AudioBuffer using
+// OfflineAudioContext — much faster than real-time.
+async function renderAudioForMovie(mode) {
+  const cues     = mode === 'occlusion' ? SOUND_CUES_RANDOM : SOUND_CUES;
+  const PHm      = mode === 'occlusion' ? PH_R : PH;
+  const duration = mode === 'occlusion' ? DURATION_R : DURATION;
+  const SR       = 44100;
+  // +1s tail so any clip that starts near the end has room to decay.
+  const offCtx   = new OfflineAudioContext(2, Math.ceil((duration + 1) * SR), SR);
+
+  // Pre-fetch every unique file in parallel.
+  const needed = new Set();
+  for (const c of cues) {
+    const file = SOUND_MAP[c.cue]; if (!file) continue;
+    needed.add(SOUND_DIR + (file.includes('.') ? file : file + '.ogg'));
+  }
+  const buffers = {};
+  await Promise.all([...needed].map(async url => { buffers[url] = await _xLoadBuf(url); }));
+
+  for (const c of cues) {
+    const ph = PHm[c.beat]; if (!ph) continue;
+    const startTime = ph.t0 + (c.offset || 0);
+    if (startTime < 0) continue;
+
+    const file = SOUND_MAP[c.cue]; if (!file) continue;
+    const url  = SOUND_DIR + (file.includes('.') ? file : file + '.ogg');
+    const buf  = buffers[url]; if (!buf) continue;
+
+    if (c.cue === 'orbit') {
+      // Loop the flat whoosh across the orbit phase with the gain envelope.
+      const src  = offCtx.createBufferSource();
+      src.buffer = buf;
+      src.loop   = true;
+      const gain = offCtx.createGain();
+      src.connect(gain).connect(offCtx.destination);
+      _xApplyOrbitEnv(gain, startTime);
+      src.start(startTime, 0);
+      src.stop(startTime + ORBIT_DUR);
+    } else {
+      const src  = offCtx.createBufferSource();
+      src.buffer = buf;
+      src.connect(offCtx.destination);
+      src.start(Math.max(0, startTime));
+      // Let clip play to natural end; no src.stop().
+    }
+  }
+
+  return offCtx.startRendering();
+}
+
+// Encode a rendered AudioBuffer as AAC-LC and feed chunks into the muxer.
+async function encodeAudioChunks(audioBuf, muxer) {
+  const SR    = audioBuf.sampleRate;
+  const NC    = audioBuf.numberOfChannels;
+  const TOTAL = audioBuf.length;
+  const CHUNK = 4096;
+
+  const enc = new AudioEncoder({
+    output: (chunk, meta) => muxer.addAudioChunk(chunk, meta),
+    error:  e => { throw e; },
+  });
+  enc.configure({ codec: 'mp4a.40.2', sampleRate: SR, numberOfChannels: NC, bitrate: 192_000 });
+
+  for (let offset = 0; offset < TOTAL; offset += CHUNK) {
+    const size   = Math.min(CHUNK, TOTAL - offset);
+    const planar = new Float32Array(NC * size);
+    for (let ch = 0; ch < NC; ch++) {
+      planar.set(audioBuf.getChannelData(ch).subarray(offset, offset + size), ch * size);
+    }
+    const ad = new AudioData({
+      format: 'f32-planar', sampleRate: SR,
+      numberOfFrames: size, numberOfChannels: NC,
+      timestamp: Math.round(offset / SR * 1_000_000),
+      data: planar,
+    });
+    enc.encode(ad);
+    ad.close();
+    if (offset % (CHUNK * 20) === 0) await new Promise(r => setTimeout(r, 0));
+  }
+  await enc.flush();
+}
+
+// ----- Main per-movie encode -----
+
+async function encodeOneMovieMP4(movie, exportS, exportTx, exportTy, onProgress) {
+  const { branch, mode, filename } = movie;
+
+  if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
+  playing = false;
+  stopAllSounds();
+
+  const savedMode = lotteryMode, savedBranch = currentBranch;
+  lotteryMode = mode === 'occlusion' ? 'occlusion' : mode === 'seq' ? 'seq' : 'spin';
+  currentBranch = branch;                                  // seqIsTrial()/cues depend on this
+
+  let kf, exitVal;
+  if (lotteryMode === 'occlusion') {
+    rPinnedSeed = R_PREFERRED[0];
+    const rmap = rPrepare(branch);
+    kf = buildKeyframesRandom(branch, rmap);
+    exitVal = rmap.chosen;
+  } else if (lotteryMode === 'seq') {
+    rPinnedSeed = null;
+    seqMovieIsTrial = (branch === 'trial1' || branch === 'trial2');
+    kf = buildKeyframesSequential(branch);
+    exitVal = 0;
+  } else {
+    rPinnedSeed = null;
+    kf = buildKeyframes(branch);
+    exitVal = CFG[branch].exitSlot;
+  }
+  const duration  = lotteryMode === 'occlusion' ? DURATION_R
+                  : lotteryMode === 'seq' ? (seqMovieIsTrial ? DURATION_SEQ_TRIAL : DURATION_SEQ)
+                  : DURATION;
+  const computeFn = lotteryMode === 'occlusion' ? computeStateRandom
+                  : lotteryMode === 'seq' ? computeStateSequential : computeState;
+
+  // Render audio first (OfflineAudioContext is fast — well under 1 s for a 30-s timeline).
+  let audioBuf = null;
+  const hasAudioEncoder = typeof AudioEncoder !== 'undefined' && typeof AudioData !== 'undefined';
+  if (hasAudioEncoder) {
+    try { audioBuf = await renderAudioForMovie(mode); } catch (e) {
+      console.warn('[export] audio render failed, continuing silent:', e);
+    }
+  }
+
+  canvas.width  = EXPORT_W;
+  canvas.height = EXPORT_H;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+
+  const { Muxer, ArrayBufferTarget } = Mp4Muxer;
+  const target = new ArrayBufferTarget();
+  const muxer  = new Muxer({
+    target,
+    video: { codec: 'avc', width: EXPORT_W, height: EXPORT_H },
+    ...(audioBuf ? { audio: { codec: 'aac', sampleRate: audioBuf.sampleRate, numberOfChannels: audioBuf.numberOfChannels } } : {}),
+    fastStart: 'in-memory',
+  });
+
+  // Encode audio track before video (mp4-muxer reorders by timestamp internally).
+  if (audioBuf) {
+    try { await encodeAudioChunks(audioBuf, muxer); } catch (e) {
+      console.warn('[export] audio encode failed, video-only:', e);
+    }
+  }
+
+  const codecStr = await pickH264Codec();
+  let encodeError = null;
+  const encoder = new VideoEncoder({
+    output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+    error:  e => { encodeError = e; },
+  });
+  encoder.configure({
+    codec:       codecStr,
+    width:       EXPORT_W,
+    height:      EXPORT_H,
+    bitrate:     16_000_000,
+    framerate:   EXPORT_FPS,
+    latencyMode: 'quality',
+  });
+
+  const TOTAL_FRAMES = Math.ceil(duration * EXPORT_FPS);
+  const US_PER_FRAME = Math.round(1_000_000 / EXPORT_FPS);
+
+  for (let i = 0; i <= TOTAL_FRAMES; i++) {
+    if (encodeError) throw encodeError;
+    const t = Math.min(i / EXPORT_FPS, duration);
+
+    ctx.setTransform(exportS, 0, 0, exportS, exportTx, exportTy);
+    drawScene(computeFn(kf, exitVal, t));
+
+    const vf = new VideoFrame(canvas, { timestamp: i * US_PER_FRAME, duration: US_PER_FRAME });
+    encoder.encode(vf, { keyFrame: i % (EXPORT_FPS * 2) === 0 });
+    vf.close();
+
+    if (onProgress) onProgress(i / TOTAL_FRAMES);
+    if (i % 30 === 0) await new Promise(r => setTimeout(r, 0));
+  }
+
+  await encoder.flush();
+  muxer.finalize();
+  lotteryMode = savedMode; currentBranch = savedBranch;
+
+  const blob = new Blob([target.buffer], { type: 'video/mp4' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = filename + '.mp4';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+async function exportAllMovies() {
+  if (typeof VideoEncoder === 'undefined' || typeof Mp4Muxer === 'undefined') {
+    alert('MP4 export requires Chrome 94+, Edge 94+, or Safari 15.4+.\nYour browser does not support WebCodecs or mp4-muxer.');
+    return;
+  }
+
+  const exportBtn = document.getElementById('export-all-btn');
+  const overlay   = document.getElementById('export-overlay');
+  const labelEl   = document.getElementById('export-movie-label');
+  const counterEl = document.getElementById('export-counter');
+  const fillEl    = document.getElementById('export-progress-fill');
+  const noteEl    = document.getElementById('export-note');
+  if (!overlay) return;
+
+  exportBtn.disabled = true;
+  overlay.classList.add('open');
+  if (labelEl)   labelEl.textContent  = 'Waiting for image assets…';
+  if (counterEl) counterEl.textContent = '';
+  if (fillEl)    fillEl.style.width   = '0%';
+  if (noteEl)    noteEl.innerHTML =
+    'H.264 MP4 · 1920×1080 · 60 fps · 16 Mbps<br>Encoding faster than real-time — stay on this tab.';
+
+  await waitForFrames();
+
+  const savedW   = canvas.width, savedH = canvas.height;
+  const exportS  = Math.min(EXPORT_W / VBW, EXPORT_H / VBH);
+  const exportTx = (EXPORT_W - VBW * exportS) / 2 - VBX * exportS;
+  const exportTy = (EXPORT_H - VBH * exportS) / 2 - VBY * exportS;
+
+  for (let i = 0; i < EXPORT_MOVIES.length; i++) {
+    const movie = EXPORT_MOVIES[i];
+    const [title, sub] = movie.label.split('\n');
+    if (labelEl)   labelEl.innerHTML  = `<strong>${title}</strong><br><span style="font-weight:500;opacity:.7">${sub}</span>`;
+    if (counterEl) counterEl.textContent = `Movie ${i + 1} of ${EXPORT_MOVIES.length}`;
+
+    await encodeOneMovieMP4(movie, exportS, exportTx, exportTy, frac => {
+      if (fillEl) fillEl.style.width = ((i + frac) / EXPORT_MOVIES.length * 100).toFixed(1) + '%';
+    });
+
+    await new Promise(r => setTimeout(r, 300));
+  }
+
+  if (labelEl)   labelEl.innerHTML   = '<strong>All done!</strong><br><span style="font-weight:500;opacity:.7">8 MP4 files downloaded</span>';
+  if (counterEl) counterEl.textContent = '';
+  if (fillEl)    fillEl.style.width  = '100%';
+  await new Promise(r => setTimeout(r, 2500));
+
+  canvas.width = savedW; canvas.height = savedH;
+  fitCanvas();
+  overlay.classList.remove('open');
+  exportBtn.disabled = false;
+}
+
 rerenderAll();
 wireCounterbalance();
+wireModeToggle();
+function wireModeToggle() {
+  const tog = document.getElementById('mode-toggle'); if (!tog) return;
+  tog.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-mode]'); if (!b) return;
+    const m = b.dataset.mode;
+    if ((m === 'seq' ? 'seq' : 'spin') === lotteryMode) return;
+    setLotteryMode(m);
+  });
+  syncModeButtons();
+}
 </script>
 </body>
 </html>
