@@ -398,10 +398,9 @@
   .phase-swath.fam   { --swath-fg: #5C4A8C; }
   .phase-swath.train { --swath-fg: #5a4f3f; }
   .phase-swath.test  { --swath-fg: #4a4a42; }
-  /* Familiarization strip: only 3 demo movies, reusing the test-side
+  /* Familiarization strip: only 2 demo movies, reusing the test-side
      single-dashed-box layout (test-row / test-content / mini-strip). */
-  #fam-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .mini-thumb.k-trial0 { --mini-stroke: #5C4A8C; }
+  #fam-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mini-thumb.k-trial1 { --mini-stroke: #C9A000; }
   .mini-thumb.k-trial2 { --mini-stroke: #C03028; }
   .phase-label {
@@ -1145,7 +1144,6 @@ function renderTestStrip() {
 // at the bottom of the script) everything it references already exists.
 // ====================================================================
 const FAM_META = [
-  { key: 'trial0', cls: 'k-trial0', title: 'Play: Intro — the turn-around/shuffle mechanism' },
   { key: 'trial1', cls: 'k-trial1', title: 'Play: Trial 1 — a yellow pill wins the ball' },
   { key: 'trial2', cls: 'k-trial2', title: 'Play: Trial 2 — a red pill wins the ball' },
 ];
@@ -1162,9 +1160,8 @@ function famThumbState(branchKey, t) {
   return state;
 }
 function famThumbHTML(meta) {
-  // trial0: mid-shuffle (backs spinning) — shows the turn-around mechanism itself.
-  // trial1/trial2: pill has just reached the goal, face visible — shows the outcome.
-  const t = meta.key === 'trial0' ? atSI('orbit', 0.5) : atST('goalHold', 0.3);
+  // The pill has just reached the goal, face visible — shows the outcome.
+  const t = atST('goalHold', 0.3);
   const state = famThumbState(meta.key, t);
   return `<div class="mini-thumb ${meta.cls}" data-play="${meta.key}" title="${meta.title}">${rawSceneSVG(state, machineVB())}</div>`;
 }
@@ -1191,7 +1188,7 @@ function renderFamStrip() {
 // ====================================================================
 function renderConvergeArrows() {
   const svg     = document.getElementById('converge-svg');
-  const wrap    = svg.parentElement;
+  const wrap    = svg && svg.parentElement;
   const trainEl = document.getElementById('train-row');
   const testEl  = document.querySelector('.phase-swath.test .test-content');
   if (!svg || !wrap || !trainEl || !testEl) return;
@@ -1256,7 +1253,7 @@ function arrowMarkerDefs(id, fill) {
 // the FOUR train rows — same geometry, reversed direction and arrowheads.
 function renderDivergeArrows() {
   const svg     = document.getElementById('diverge-svg');
-  const wrap    = svg.parentElement;
+  const wrap    = svg && svg.parentElement;
   const trainEl = document.getElementById('train-row');
   const famEl   = document.querySelector('.phase-swath.fam .test-content');
   if (!svg || !wrap || !trainEl || !famEl) return;
@@ -1416,12 +1413,22 @@ const TIMELINE_SEQ = [
   { name: 'settle',      dur: 0.45 },
   { name: 'crumbleHold', dur: 0.30 },  // brief hold before the explosion
   { name: 'crumble',     dur: 1.00 },  // the TOP pill explodes
-  { name: 'reveal',      dur: 0.55 },  // the two SIDE pills flip face-out — immediately
-  { name: 'revealHold',  dur: 2.30 },  // ding · ding · ding (pop pop)
+  // Chosen (bottom) drops and struggles FIRST — matches the original classic
+  // mechanism verbatim from here on: descend → two brief vibrating pulses
+  // against the door (both fail, door just bows) → stop → the two SIDE pills
+  // reveal + pop three times → rehide → a sustained building struggle
+  // (chirping vibration, door bowing harder and harder) → SNAPS open → out.
   { name: 'descend',     dur: 1.10 },  // chosen (bottom) drops to the door
-  { name: 'door1Push',   dur: 0.45 },  // attempt 1 — push, door resists
-  { name: 'door1Recoil', dur: 0.55 },  // bounce back up
-  { name: 'door2Push',   dur: 0.60 },  // attempt 2 — push through, door opens
+  { name: 'pulse1',      dur: 0.80 },  // first brief buzz — door bows, doesn't open
+  { name: 'pulsePause1', dur: 0.45 },  // silence between pulses
+  { name: 'pulse2',      dur: 0.80 },  // second brief buzz — door bows, doesn't open
+  { name: 'pulsePause2', dur: 0.55 },  // silence before the reveal
+  { name: 'reveal',      dur: 0.55 },  // the two SIDE pills flip face-out
+  { name: 'revealHold',  dur: 2.30 },  // ding · ding · ding (pop pop)
+  { name: 'rehide',      dur: 0.50 },  // sides flip back to hidden
+  { name: 'postReveal',  dur: 0.60 },  // split-second pause before the vibration builds
+  { name: 'preSpit',     dur: 1.80 },  // suspense build — pill vibrates, growing, door bows harder
+  { name: 'spit',        dur: 0.12 },  // door SNAPS open — fast
   { name: 'through',     dur: 0.35 },  // bursts out as a back to the ball
   { name: 'goalHold',    dur: 0.85 },  // sits at the goal (hidden back)
   { name: 'flipReveal',  dur: 0.55 },  // turns around + firework + chime
@@ -1432,28 +1439,45 @@ const PH_SEQ = {};
 const DURATION_SEQ = TIMELINE_SEQ.reduce((a, p) => a + p.dur, 0);
 const atS = (name, frac = 0) => PH_SEQ[name].t0 + frac * PH_SEQ[name].dur;
 
+// FAMILIARIZATION trial: full dance → gather into the SQUARE (faces) → spin
+// FULLY VISIBLE and land back in a square in a DIFFERENT orientation (columns
+// swap sides) → ~1s pause → flip to backs and KEEP spinning → land in the
+// DIAMOND (winner at the bottom, over the tube) → pause → flip back to faces →
+// the bottom pill descends and fights the door (two failed struggles, then
+// breaks through) and gets the ball, face showing. Door timing mirrors the
+// train/test "visible pill gets the ball" beat.
 const TIMELINE_SEQ_TRIAL = [
-  { name: 'loadPause',   dur: 0.60 },
-  { name: 'introSettle', dur: 0.30 },
-  { name: 'yellowDance', dur: 1.90 },  // full dance kept for the familiarization demo
-  { name: 'yellowJump',  dur: 1.00 },
-  { name: 'beat',        dur: 1.10 },
-  { name: 'redDance',    dur: 1.90 },
-  { name: 'redShake',    dur: 1.00 },
-  { name: 'dancesDone',  dur: 0.15 },
-  { name: 'premixPause', dur: 0.55 },
-  { name: 'gather',      dur: 1.30 },  // fly into formation — FACES, no flip
-  { name: 'orbit',       dur: 3.00 },  // spin while fully visible
-  { name: 'settle',      dur: 0.70 },  // settle into a flat 2×2 (2 yellow L / 2 red R)
-  { name: 'pickPause',   dur: 0.50 },
-  { name: 'slideIn',     dur: 0.70 },  // the winning colour slides over the tube
-  { name: 'descend',     dur: 1.10 },
-  { name: 'door1Push',   dur: 0.45 },
-  { name: 'door1Recoil', dur: 0.55 },
-  { name: 'door2Push',   dur: 0.60 },
-  { name: 'through',     dur: 0.35 },
-  { name: 'goalHold',    dur: 0.70 },
-  { name: 'endHold',     dur: 1.50 },
+  { name: 'loadPause',    dur: 0.60 },
+  { name: 'introSettle',  dur: 0.30 },
+  { name: 'yellowDance',  dur: 1.90 },  // full dance kept for the familiarization demo
+  { name: 'yellowJump',   dur: 1.00 },
+  { name: 'beat',         dur: 1.10 },
+  { name: 'redDance',     dur: 1.90 },
+  { name: 'redShake',     dur: 1.00 },
+  { name: 'dancesDone',   dur: 0.15 },
+  { name: 'premixPause',  dur: 0.55 },
+  { name: 'gather',       dur: 1.30 },  // fly into the SQUARE — FACES, no flip
+  { name: 'orbit1',       dur: 3.00 },  // spin FULLY VISIBLE → square, columns swapped
+  { name: 'squarePause',  dur: 1.00 },  // ~1s pause once the visible spin settles
+  { name: 'flip',         dur: 0.60 },  // flip to BACKS in place
+  { name: 'flipHold',     dur: 0.30 },
+  { name: 'orbit2',       dur: 3.00 },  // keep spinning (as backs) → DIAMOND
+  { name: 'diamondPause', dur: 0.60 },  // brief pause in the diamond
+  { name: 'flipBack',     dur: 0.60 },  // everyone turns back over → faces
+  { name: 'facePause',    dur: 0.35 },  // beat before the descent
+  { name: 'descend',      dur: 1.10 },  // bottom pill drops to the door
+  // Door struggle matches classic verbatim from here: two brief vibrating
+  // pulses (door bows, doesn't open), then a sustained building struggle
+  // (chirping vibration, door bowing harder) that SNAPS open.
+  { name: 'pulse1',       dur: 0.80 },  // first brief buzz — door bows, doesn't open
+  { name: 'pulsePause1',  dur: 0.45 },
+  { name: 'pulse2',       dur: 0.80 },  // second brief buzz — door bows, doesn't open
+  { name: 'pulsePause2',  dur: 0.55 },
+  { name: 'preSpit',      dur: 1.80 },  // suspense build — vibrates, growing, door bows harder
+  { name: 'spit',         dur: 0.12 },  // door SNAPS open — fast
+  { name: 'through',      dur: 0.35 },  // bursts out to the ball (face up)
+  { name: 'goalHold',     dur: 0.85 },  // gets the ball → firework
+  { name: 'endHold',      dur: 1.40 },
 ];
 const PH_SEQ_TRIAL = {};
 { let acc = 0; for (const p of TIMELINE_SEQ_TRIAL) { PH_SEQ_TRIAL[p.name] = { t0: acc, t1: acc + p.dur, dur: p.dur }; acc += p.dur; } }
@@ -1923,11 +1947,13 @@ function capPath(c) { ctx.beginPath(); ctx.roundRect(c.ox - c.vw / 2, c.oy - c.v
 // these at draw time: the front face per kind foreshortens to an edge-on sliver
 // at 90deg, then swaps to the NEW back expanding out — the same angle-based roll
 // logic, no pre-baked frames, no procedural crosshatch back.
-const NEW_FACE = {
-  happy: Object.assign(new Image(), { src: '_shared/happy_cut.png' }),
-  angry: Object.assign(new Image(), { src: '_shared/angry_cut.png' }),
-};
-const NEW_BACK = Object.assign(new Image(), { src: '_shared/back_new.png' });
+const NEW_FACE = { happy: new Image(), angry: new Image() };
+const NEW_BACK = new Image();
+for (const [img, src] of [
+  [NEW_FACE.happy, '_shared/happy_cut.png'],
+  [NEW_FACE.angry, '_shared/angry_cut.png'],
+  [NEW_BACK, '_shared/back_new.png'],
+]) { framesTotal++; img.onload = () => { framesReady++; }; img.src = src; }
 function drawPill(kind, cx, cy, sx = 1, sy = 1, rot = 0, tilt = 0) {
   // 3D rotation = the pre-generated in-between frames. framePath() picks the
   // nearest 5deg frame in _shared/frames/{yellow,red}_NNN.png (000=face .. 036=back).
@@ -2873,16 +2899,25 @@ function computeState(kf, EXIT_SLOT, t) {
   if (t < PH.flySquare.t0) return state;
 
   const CX = ARENA_CX, CY = ARENA_CY, R = ANIM.orbit.radius, D2R = Math.PI / 180;
-  // Diamond center is lifted above the arena center so the top pill rides just
+  // Formation center is lifted above the arena center so the top row rides just
   // under the box top. CY (the dance-row baseline) stays put for the fly-in and
-  // for the pillOffsets math; only the diamond geometry uses OCY.
+  // for the pillOffsets math; only the formation geometry uses OCY.
   const OCY = ARENA_CY - ANIM.orbit.lift;
   const posAt = deg => ({ x: CX + R * Math.cos(deg * D2R), y: OCY + R * Math.sin(deg * D2R) });
   const slotX = [-180, -105, 105, 180].map(d => CX + d);
-  // Diamond, point-symmetric: outer pills → sides (L/R), inner pills → top/bottom.
-  // Opposite pills sit truly opposite (180/0, 270/90) so the spin keeps it balanced.
-  // slots: [outer-L, inner-L, inner-R, outer-R]
-  const base = [180, 270, 90, 0];
+  // Gather into a flat SQUARE (not a diamond) — slots 0,1 (always yellow, per
+  // layout=['happy','happy','angry','angry']) in the LEFT column, slots 2,3
+  // (always red) in the RIGHT column. slot2 is ALWAYS the crumble slot for
+  // classic (exitSlot=0, revealSlots=[1,3] on every branch), so it's placed
+  // diagonally opposite slot0 here (NW↔SE) — after the spin's forced
+  // realignment below, the diagonal-opposite-of-bottom lands exactly on TOP.
+  const base = [225, 135, 45, 315];             // slot0=NW(EXIT) 1=SW 2=SE(CRUMBLE) 3=NE
+  // Forced realignment: spin however many whole turns, PLUS just enough extra
+  // to land EXIT_SLOT exactly at the bottom (90°) of the circle. Since every
+  // square corner is an odd multiple of 45° and 90° is an even multiple, that
+  // "extra" is always an odd multiple of 45° too — so EVERY slot lands on a
+  // standard diamond point (0/90/180/270), continuing smoothly around the same
+  // circle with no separate transition (nothing to make two pills' paths cross).
   const totalSpin = ANIM.orbit.turns * 360 + (((90 - base[EXIT_SLOT]) % 360) + 360) % 360;
   const finalDeg = i => base[i] + totalSpin;
   const sinkY = tt => {
@@ -2890,9 +2925,11 @@ function computeState(kf, EXIT_SLOT, t) {
     const u = Math.min(1, Math.max(0, (tt - PH.exit.t0) / (PH.descent.t1 - PH.exit.t0)));
     return y0 + (REST - y0) * u * u;
   };
-  // Fly into the diamond (no rotation during the fly, so paths don't cross), HOLD
-  // there through the 'turn' phase while the pills do the original turnaround flip,
-  // then orbit. base is the diamond (inner→top/bottom, outer→sides).
+  // Fly into the square (no rotation during the fly, so paths don't cross), HOLD
+  // there through the 'turn' phase while the pills do the original turnaround
+  // flip, then orbit — the same rotation that spins them also carries them from
+  // the square into the diamond (EXIT ends up exactly at the bottom, x=CX, so
+  // the descent below needs no sideways slide).
   const posOf = i => {
     if (t < PH.flySquare.t1) {
       const u = easeInOut((t - PH.flySquare.t0) / PH.flySquare.dur);
@@ -3037,7 +3074,6 @@ function seqCfgFrom(cfg) {
 }
 
 function buildKeyframesSequential(branchKey) {
-  if (branchKey === 'trial0') return buildKeyframesSeqIntro(branchKey);
   if (branchKey === 'trial1' || branchKey === 'trial2') return buildKeyframesSeqTrial(branchKey);
   const cfg = seqCfgFrom(CFG[branchKey] || CFG.visual);
   const A = atS;
@@ -3056,7 +3092,7 @@ function buildKeyframesSequential(branchKey) {
   const allBackNo   = dropTop(allBack);                            // top gone after explosion
   const arenaReveal = dropTop(faceSides(revPills));               // sides face-out, top gone, bottom(exit) back
   const arenaPop    = dropTop(popSides(revPills));
-  const sidesOnly   = dropExit(arenaReveal);                       // after the chosen drops: only the 2 side pills
+  const sidesBack   = dropExit(dropTop(revPills));                 // after the chosen drops / rehide: 2 side pills, hidden (revealLayout kind, no snap)
   const zero = pills.map(() => ({ dx: 0, dy: 0 }));
   const base = { pills: allFace, revealedPill: null, shakeX: 0, fireworks: 0, burst: 0,
                  yellowDx: 0, yellowDy: 0, yellowScaleX: 1, yellowScaleY: 1,
@@ -3064,11 +3100,16 @@ function buildKeyframesSequential(branchKey) {
   const orient  = cfg.cover ? 180 : 0;
   const endPill = { revealedPill: cfg.cover ? 'silhouette' : cfg.dispensed };
   const REST = TUBE_TOP - 41.5;
-  // chosen pill drawn ON TOP for the through→goal→flip ending (delayed-reveal style)
-  const pop = (y, rot, burst = 0, extra) => ({ ...base, pills: sidesOnly, revealedPill: cfg.dispensed,
+  // chosen pill drawn ON TOP for the through→goal→flip ending (delayed-reveal style).
+  // Used only AFTER rehide, so the two side pills should show as hidden backs
+  // — otherwise they'd visibly re-reveal themselves right as the chosen pill
+  // bursts through.
+  const pop = (y, rot, burst = 0, extra) => ({ ...base, pills: sidesBack, revealedPill: cfg.dispensed,
     exitY: y, exitRot: rot, tubePillY: y, tubePillScaleX: 1, tubePillScaleY: 1, tubeBulge: 0, tubeTaper: 56,
     fireworks: 0, burst, ...extra });
-  const tube = (extra = {}) => ({ ...base, pills: sidesOnly, revealedPill: 'silhouette',
+  // Default pills = sidesBack (hidden), since most tube() calls are pre-reveal
+  // or post-rehide; the 'reveal'/'revealHold' beats override pills explicitly.
+  const tube = (extra = {}) => ({ ...base, pills: sidesBack, revealedPill: 'silhouette',
     tubePillY: REST, tubePillScaleX: 1, tubePillScaleY: 1, tubeBulge: 3, tubeTaper: 54, ...extra });
 
   const kf = [
@@ -3106,23 +3147,35 @@ function buildKeyframesSequential(branchKey) {
     // TOP explodes
     { t: A('crumble', 0.00), state: { ...base, pills: allBack,   crumbleSlot: CRUMBLE, crumble: 0 } },
     { t: A('crumble', 1.00), state: { ...base, pills: allBackNo, crumbleSlot: CRUMBLE, crumble: 1 } },
-    // SIDES reveal immediately (before the chosen moves), then ding · ding · ding
-    { t: A('reveal', 1.00), state: { ...base, pills: arenaReveal } },
-    { t: A('revealHold', 0.12), state: { ...base, pills: arenaReveal } },
-    { t: A('revealHold', 0.22), state: { ...base, pills: arenaPop } },     // ding 1
-    { t: A('revealHold', 0.32), state: { ...base, pills: arenaReveal } },
-    { t: A('revealHold', 0.42), state: { ...base, pills: arenaPop } },     // ding 2
-    { t: A('revealHold', 0.52), state: { ...base, pills: arenaReveal } },
-    { t: A('revealHold', 0.62), state: { ...base, pills: arenaPop } },     // ding 3
-    { t: A('revealHold', 0.72), state: { ...base, pills: arenaReveal } },
-    { t: A('revealHold', 1.00), state: { ...base, pills: arenaReveal } },
-    // chosen (bottom) descends into the tube as a silhouette; the 2 side pills remain face-out
-    { t: A('descend', 1.00), state: tube() },
-    // two-attempt door (motion computed in computeStateSequential)
-    { t: A('door1Push', 1.00), state: tube() },
-    { t: A('door1Recoil', 1.00), state: tube() },
-    { t: A('door2Push', 1.00), state: tube() },
-    // through → ball (bursts out as a hidden back), holds, then turns + firework
+    // chosen (bottom) descends into the tube as a silhouette; the 2 side pills stay hidden backs.
+    // pulse1/pulsePause1/pulse2/pulsePause2 need no keyframes of their own — exactly
+    // like classic, the vibration (push + door bow + lateral rattle) is computed
+    // procedurally in computeStateSequential as an overlay on this same flat state.
+    { t: A('descend', 1.00), state: tube({ pills: dropExit(dropTop(allBack)) }) },
+    { t: A('pulsePause2', 1.00), state: tube({ pills: dropExit(dropTop(allBack)) }) },
+    // NOW the two SIDE pills reveal, then ding · ding · ding
+    { t: A('reveal', 1.00), state: tube({ pills: arenaReveal }) },
+    { t: A('revealHold', 0.12), state: tube({ pills: arenaReveal }) },
+    { t: A('revealHold', 0.22), state: tube({ pills: arenaPop }) },     // ding 1
+    { t: A('revealHold', 0.32), state: tube({ pills: arenaReveal }) },
+    { t: A('revealHold', 0.42), state: tube({ pills: arenaPop }) },     // ding 2
+    { t: A('revealHold', 0.52), state: tube({ pills: arenaReveal }) },
+    { t: A('revealHold', 0.62), state: tube({ pills: arenaPop }) },     // ding 3
+    { t: A('revealHold', 0.72), state: tube({ pills: arenaReveal }) },
+    { t: A('revealHold', 1.00), state: tube({ pills: arenaReveal }) },
+    // sides rotate back to hidden backs, brief pause, THEN the sustained struggle
+    // builds (preSpit — procedural, same as classic) until the door SNAPS open (spit)
+    { t: A('rehide', 1.00), state: tube({ pills: sidesBack }) },
+    { t: A('preSpit', 1.00), state: tube() },
+    // through → ball (bursts out as a hidden back), holds, then turns + firework.
+    // The tube-silhouette (clipped to the tube channel) and the "on-top" pop
+    // render (unclipped, drawn at exitY) are two different render PATHS, and
+    // revealedPill hard-switches between them at the tween midpoint — if this
+    // span is wide, tubePillY glides past the tube's clip bounds well before
+    // that midpoint, so the pill is clipped invisible in neither mode for a
+    // stretch. Snapping to pop() almost immediately (small fraction into
+    // 'through') keeps that gap too brief to see, same as the classic 'spit' beat.
+    { t: A('through', 0.08), state: pop(REVEAL_CY, 180, 0) },
     { t: A('through', 1.00), state: pop(REVEAL_CY, 180, 0) },
     { t: A('goalHold', 1.00), state: pop(REVEAL_CY, 180, 0) },
     { t: A('flipReveal', 0.55), state: pop(REVEAL_CY, orient, 0.55) },
@@ -3133,7 +3186,6 @@ function buildKeyframesSequential(branchKey) {
 }
 
 function computeStateSequential(kf, EXIT_SLOT, t) {
-  if (currentBranch === 'trial0') return computeStateSeqIntro(kf, EXIT_SLOT, t);
   if (seqMovieIsTrial) return computeStateSeqTrial(kf, EXIT_SLOT, t);
   const P = PH_SEQ;
   let state = stateAtTime(kf, t);
@@ -3145,41 +3197,35 @@ function computeStateSequential(kf, EXIT_SLOT, t) {
   const OCY = ARENA_CY - ANIM.orbit.lift;
   const posAt = deg => ({ x: CX + R * Math.cos(deg * D2R), y: OCY + R * Math.sin(deg * D2R) });
   const slotX = [-180, -105, 105, 180].map(d => CX + d);
-  const baseAng = [180, 270, 90, 0];                          // slot0→bottom, 1→left, 2→right, 3→top after spin
+  // Gather into a flat SQUARE (not a diamond) — yellows (0,1) LEFT column,
+  // reds (2,3) RIGHT column. CRUMBLE is always slot3 here (see
+  // buildKeyframesSequential), placed diagonally opposite EXIT (slot0, NW↔SE)
+  // so the forced realignment below (which always lands EXIT at the bottom)
+  // automatically lands CRUMBLE exactly on TOP — continuing the same circular
+  // motion with no separate transition (nothing to make two pills cross).
+  const baseAng = [225, 135, 315, 45];        // slot0=NW(EXIT) 1=SW(reveal) 2=NE(reveal) 3=SE(CRUMBLE)
   const totalSpin = ANIM.orbit.turns * 360 + (((90 - baseAng[EXIT_SLOT]) % 360) + 360) % 360;
-  const finalDeg = i => baseAng[i] + totalSpin;
+  const finalAng = i => baseAng[i] + totalSpin;
   const REST = TUBE_TOP - 41.5;
+  // EXIT lands exactly at the bottom (x=CX) via the realignment above, so the
+  // descent is a straight drop — no sideways slide needed.
+  // Pure descent — clamps to REST once landed. The push/rattle struggle below
+  // is a separate ADDITIVE overlay on top of this, exactly like classic (whose
+  // sinkY also has no push baked in): the door bowing and the pill jostling are
+  // motion layered ON a pill that has already arrived, not baked into its path.
   const descY = tt => { const y0 = OCY + R; const u = Math.min(1, Math.max(0, (tt - P.descend.t0) / P.descend.dur)); return y0 + (REST - y0) * u * u; };
-  // Two-attempt door: extra downward push (dy) past REST + how hard the door bows.
-  // attempt 1 pushes, fails, recoils UP; attempt 2 pushes harder and the door opens.
-  const PUSH = 12;
-  function doorStage(tt) {
-    if (tt < P.door1Push.t0) return { dy: 0, bend: 0, frac: 0 };
-    if (tt < P.door1Push.t1) { const u = (tt - P.door1Push.t0) / P.door1Push.dur; const e = Math.sin(Math.PI / 2 * u); return { dy: PUSH * e, bend: e, frac: 0 }; }
-    if (tt < P.door1Recoil.t1) { const u = (tt - P.door1Recoil.t0) / P.door1Recoil.dur;
-      // from +PUSH down through 0 up to a small bounce, then settle to REST
-      const dy = u < 0.5 ? lerp(PUSH, -10, easeInOut(u / 0.5)) : lerp(-10, 0, (u - 0.5) / 0.5);
-      return { dy, bend: Math.max(0, PUSH ? (1 - Math.min(1, u * 2)) : 0), frac: 0 }; }
-    if (tt < P.door2Push.t1) { const u = (tt - P.door2Push.t0) / P.door2Push.dur; const e = Math.sin(Math.PI / 2 * Math.min(1, u * 1.05));
-      return { dy: PUSH * e, bend: Math.min(1, u * 1.3), frac: u > 0.7 ? (u - 0.7) / 0.3 : 0 }; }
-    return { dy: PUSH, bend: 1, frac: 1 };
-  }
-  const pillY = tt => (tt < P.descend.t1) ? descY(tt) : REST + doorStage(tt).dy;
   const posOf = i => {
     if (t < P.gather.t0) return { x: slotX[i], y: CY };                                  // dance row (flip in place)
     if (t < P.gather.t1) { const u = easeInOut((t - P.gather.t0) / P.gather.dur); const c = posAt(baseAng[i]); return { x: lerp(slotX[i], c.x, u), y: lerp(CY, c.y, u) }; }
-    if (i === EXIT_SLOT && t >= P.descend.t0) return { x: CX, y: pillY(t) };
+    if (i === EXIT_SLOT && t >= P.descend.t0) return { x: CX, y: descY(t) };
     if (t < P.orbit.t0) return posAt(baseAng[i]);
     if (t < P.orbit.t1) return posAt(baseAng[i] + totalSpin * easeInOut((t - P.orbit.t0) / P.orbit.dur));
-    return posAt(finalDeg(i));
+    return posAt(finalAng(i));
   };
   state = { ...state, pillOffsets: [0, 1, 2, 3].map(i => { const p = posOf(i); return { dx: p.x - slotX[i], dy: p.y - CY }; }) };
 
-  let doorFrac = 0, doorBend = 0;
-  // Descent + door struggle: the chosen pill is the in-tube silhouette. Keep the
-  // arena pill (pillOffsets[EXIT]) and the tube silhouette (tubePillY) locked together.
-  if (t >= P.descend.t0 && t < P.through.t0) {
-    const y = pillY(t);
+  if (t >= P.descend.t0 && t < P.spit.t0) {
+    const y = descY(t);
     if (y >= TUBE_TOP - PILL_DRAW_H * 0.62) {
       state = { ...state, revealedPill: 'silhouette', tubePillY: y, tubeBulge: 3, tubeTaper: PILL_DRAW_H / 2 };
     } else if (state.revealedPill === 'silhouette') {
@@ -3190,7 +3236,75 @@ function computeStateSequential(kf, EXIT_SLOT, t) {
       const offs2 = state.pillOffsets.slice(); offs2[EXIT_SLOT] = { dx: CX - slotX[EXIT_SLOT], dy: y - CY };
       state = { ...state, pills: pills2, pillOffsets: offs2 };
     }
-    const ds = doorStage(t); doorBend = ds.bend; doorFrac = ds.frac;
+  }
+
+  // Two brief pre-reveal pulses: whole pill pushes down + rattles laterally
+  // (verbatim from classic's pulse1/pulse2 — the arena portion and the tube
+  // silhouette move as one piece, patched into pillOffsets[EXIT_SLOT]).
+  let doorFrac = 0, doorBend = 0;
+  for (const ph of [P.pulse1, P.pulse2]) {
+    if (state.revealedPill === 'silhouette' && t >= ph.t0 && t < ph.t1) {
+      const tau = t - ph.t0, dur = ph.dur;
+      const env = Math.sin(Math.PI * tau / dur);
+      const pushSin = Math.max(0, Math.sin(2 * Math.PI * 5 * tau));
+      const pushY = 11 * env * pushSin;
+      const lateralX = ANIM.suspense.amp * 0.55 * env * Math.sin(2 * Math.PI * 9 * tau);
+      state = { ...state, tubePillY: state.tubePillY + pushY, tubeShakeX: lateralX };
+      if (state.pills && state.pills[EXIT_SLOT] && state.pillOffsets) {
+        const offs2 = state.pillOffsets.slice(); const o = offs2[EXIT_SLOT];
+        offs2[EXIT_SLOT] = { dx: o.dx + lateralX, dy: o.dy + pushY };
+        state = { ...state, pillOffsets: offs2 };
+      }
+      doorBend = Math.max(doorBend, env * pushSin);  // door bows, does NOT open
+    }
+  }
+  // Sustained struggle: push + rattle build together until the spit (verbatim from classic's preSpit).
+  const vibStart = P.preSpit.t0, vibEnd = P.spit.t0;
+  if (state.revealedPill === 'silhouette' && t >= vibStart && t < vibEnd) {
+    const tau = t - vibStart, dur = vibEnd - vibStart, u = tau / dur;
+    const pushAmp = 11, env = 0.30 + 0.40 * Math.pow(u, 1.6);
+    const f0 = 4, f1 = 16;
+    const chirpPhase = 2 * Math.PI * (f0 * tau + 0.5 * (f1 - f0) / dur * tau * tau);
+    const pushSin = Math.max(0, Math.sin(chirpPhase));
+    const pushY = pushAmp * env * pushSin;
+    const lateralX = ANIM.suspense.amp * env * Math.sin(2 * Math.PI * (6 * tau + 0.5 * 16 / dur * tau * tau));
+    state = { ...state, tubePillY: state.tubePillY + pushY, tubeShakeX: lateralX };
+    if (state.pills && state.pills[EXIT_SLOT] && state.pillOffsets) {
+      const offs2 = state.pillOffsets.slice(); const o = offs2[EXIT_SLOT];
+      offs2[EXIT_SLOT] = { dx: o.dx + lateralX, dy: o.dy + pushY };
+      state = { ...state, pillOffsets: offs2 };
+    }
+    doorBend = Math.max(doorBend, env * pushSin);
+  }
+  // After spit: door springs fully open in 120 ms
+  if (t >= P.spit.t0) doorFrac = Math.min(1, (t - P.spit.t0) / 0.12);
+  // Additive lateral vibration rattle — on top of the push motion above (verbatim from classic).
+  const VIBE_AMP = 2;
+  for (const ph of [P.pulse1, P.pulse2]) {
+    if (state.revealedPill === 'silhouette' && t >= ph.t0 && t < ph.t1) {
+      const tau = t - ph.t0, dur = ph.dur;
+      const env = Math.sin(Math.PI * tau / dur);
+      const vibX = VIBE_AMP * env * Math.sin(2 * Math.PI * 14 * tau);
+      state = { ...state, tubeShakeX: (state.tubeShakeX || 0) + vibX };
+      if (state.pills && state.pills[EXIT_SLOT] && state.pillOffsets) {
+        const offs2 = state.pillOffsets.slice();
+        offs2[EXIT_SLOT] = { dx: offs2[EXIT_SLOT].dx + vibX, dy: offs2[EXIT_SLOT].dy };
+        state = { ...state, pillOffsets: offs2 };
+      }
+    }
+  }
+  if (state.revealedPill === 'silhouette' && t >= P.preSpit.t0 && t < P.spit.t0) {
+    const tau = t - P.preSpit.t0, dur = P.spit.t0 - P.preSpit.t0, u = tau / dur;
+    const env = 0.25 + 0.35 * Math.pow(u, 1.6);
+    const f0 = 10, f1 = 18;
+    const phase = 2 * Math.PI * (f0 * tau + 0.5 * (f1 - f0) / dur * tau * tau);
+    const vibX = VIBE_AMP * env * Math.sin(phase);
+    state = { ...state, tubeShakeX: (state.tubeShakeX || 0) + vibX };
+    if (state.pills && state.pills[EXIT_SLOT] && state.pillOffsets) {
+      const offs2 = state.pillOffsets.slice();
+      offs2[EXIT_SLOT] = { dx: offs2[EXIT_SLOT].dx + vibX, dy: offs2[EXIT_SLOT].dy };
+      state = { ...state, pillOffsets: offs2 };
+    }
   }
   // After the pill is through, the door stays open.
   if (t >= P.through.t0) doorFrac = 1;
@@ -3209,68 +3323,53 @@ function buildKeyframesSeqTrial(branchKey) {
   const A = atST;
   const pills = ['happy', 'happy', 'angry', 'angry'];     // yellows 0,1 (left col) · reds 2,3 (right col)
   const winKind = pills[WIN];
-  const allFace = pills.map(k => ({ kind: k, rot: 0 }));
-  const others  = allFace.map((p, i) => i === WIN ? null : p);   // arena after the winner leaves
+  const allFace    = pills.map(k => ({ kind: k, rot: 0 }));
+  const allBack    = pills.map(k => ({ kind: k, rot: 180 }));
+  // Intermediate turnaround angles so the 3D roll reads smoothly (not a flat snap).
+  const allTurn45  = pills.map(k => ({ kind: k, rot: 45 }));
+  const allTurn90  = pills.map(k => ({ kind: k, rot: 90 }));
+  const allTurn135 = pills.map(k => ({ kind: k, rot: 135 }));
   const zero = pills.map(() => ({ dx: 0, dy: 0 }));
   const base = { pills: allFace, revealedPill: null, shakeX: 0, fireworks: 0, burst: 0,
                  yellowDx: 0, yellowDy: 0, yellowScaleX: 1, yellowScaleY: 1,
                  redDx: 0, redDy: 0, redScaleX: 1, redScaleY: 1, redTilt: 0, pillOffsets: zero };
   const REST = TUBE_TOP - 41.5;
-  // winner drawn ON TOP as a face (rot 0) for slide-in → descent → door → ball
-  const win = (y, burst = 0, extra) => ({ ...base, pills: others, revealedPill: winKind,
+  // Winner drawn ON TOP as a face (rot 0) for descent → door → ball. The arena
+  // keeps all four faces here; computeStateSeqTrial nulls the winner's arena
+  // slot once it starts descending, so there's no double-draw.
+  const win = (y, burst = 0, extra) => ({ ...base, pills: allFace, revealedPill: winKind,
     exitY: y, exitRot: 0, tubePillY: y, tubePillScaleX: 1, tubePillScaleY: 1, tubeBulge: 0, tubeTaper: 56,
     fireworks: 0, burst, ...extra });
   const kf = [
-    { t: A('introSettle', 0), state: { ...base } },
-    { t: A('introSettle', 1), state: { ...base } },
-    // FULL yellow dance (sway + yay)
-    { t: A('yellowDance', 0.00), state: { ...base } },
-    { t: A('yellowDance', 0.12), state: { ...base, yellowDx:  8, yellowDy: -42, yellowTilt:  5 } },
-    { t: A('yellowDance', 0.24), state: { ...base, yellowDx: 14, yellowDy:  2,  yellowTilt: 10, yellowScaleX: 1.08, yellowScaleY: 0.91 } },
-    { t: A('yellowDance', 0.36), state: { ...base, yellowDx:  6, yellowDy: -22, yellowTilt:  4 } },
-    { t: A('yellowDance', 0.48), state: { ...base, yellowDy: 1 } },
-    { t: A('yellowDance', 0.60), state: { ...base, yellowDx: -8, yellowDy: -42, yellowTilt: -5 } },
-    { t: A('yellowDance', 0.72), state: { ...base, yellowDx:-14, yellowDy:  2,  yellowTilt:-10, yellowScaleX: 1.08, yellowScaleY: 0.91 } },
-    { t: A('yellowDance', 0.84), state: { ...base, yellowDx: -6, yellowDy: -22, yellowTilt: -4 } },
-    { t: A('yellowDance', 0.96), state: { ...base, yellowDy: 1 } },
-    { t: A('yellowDance', 1.00), state: { ...base } },
-    { t: A('yellowJump', 0.44), state: { ...base, yellowScaleX: 1.12, yellowScaleY: 0.85, yellowDy: 8 } },
-    { t: A('yellowJump', 0.66), state: { ...base, yellowScaleX: 0.88, yellowScaleY: 1.16, yellowDy: -70 } },
-    { t: A('yellowJump', 0.84), state: { ...base, yellowScaleX: 1.12, yellowScaleY: 0.85, yellowDy: 6 } },
-    { t: A('yellowJump', 1.00), state: { ...base } },
-    { t: A('beat', 1.00), state: { ...base } },
-    // FULL red dance (shudder + chest bump)
-    { t: A('redDance', 0.00), state: { ...base } },
-    { t: A('redDance', 0.11), state: { ...base, redDx: -7, redTilt: -5, redScaleX: 1.08, redScaleY: 0.92 } },
-    { t: A('redDance', 0.23), state: { ...base, redDx: -7, redTilt: -5, redScaleX: 1.08, redScaleY: 0.92 } },
-    { t: A('redDance', 0.35), state: { ...base, redDx: -7, redTilt: -5, redScaleX: 1.08, redScaleY: 0.92 } },
-    { t: A('redDance', 0.47), state: { ...base, redDx: -7, redTilt: -5, redScaleX: 1.08, redScaleY: 0.92 } },
-    { t: A('redDance', 0.59), state: { ...base, redDx: -7, redTilt: -5, redScaleX: 1.08, redScaleY: 0.92 } },
-    { t: A('redDance', 0.71), state: { ...base, redDx:  7, redTilt:  5, redScaleX: 1.08, redScaleY: 0.92 } },
-    { t: A('redDance', 0.83), state: { ...base, redDx: -7, redTilt: -5, redScaleX: 1.08, redScaleY: 0.92 } },
-    { t: A('redDance', 0.95), state: { ...base, redDx:  0, redTilt:  0 } },
-    { t: A('redDance', 1.00), state: { ...base } },
-    { t: A('redShake', 0.00), state: { ...base, redScaleX: 1.03, redScaleY: 0.97 } },
-    { t: A('redShake', 0.28), state: { ...base, redScaleX: 1.08, redScaleY: 0.90, pillOffsets: [zero[0], zero[1], { dx: -12, dy: 4 }, { dx: 12, dy: 4 }] } },
-    { t: A('redShake', 0.52), state: { ...base, redScaleX: 0.82, redScaleY: 1.18, pillOffsets: [zero[0], zero[1], { dx: 17, dy: -22 }, { dx: -17, dy: -22 }] } },
-    { t: A('redShake', 0.65), state: { ...base, redScaleX: 1.07, redScaleY: 0.92, pillOffsets: [zero[0], zero[1], { dx: 7, dy: 2 }, { dx: -7, dy: 2 }] } },
-    { t: A('redShake', 1.00), state: { ...base } },
-    { t: A('dancesDone', 1.00), state: { ...base } },
-    { t: A('premixPause', 1.00), state: { ...base } },
-    // gather + spin while FULLY VISIBLE (no flip), settle into the flat 2×2
-    { t: A('gather', 1.00), state: { ...base } },
-    { t: A('orbit', 1.00), state: { ...base } },
-    { t: A('settle', 1.00), state: { ...base } },
-    { t: A('pickPause', 1.00), state: { ...base } },
-    // the winning colour slides over the tube, then descends (face up)
-    { t: A('slideIn', 1.00), state: win(REST) },
-    { t: A('descend', 1.00), state: win(REST) },
-    { t: A('door1Push', 1.00), state: win(REST) },
-    { t: A('door1Recoil', 1.00), state: win(REST) },
-    { t: A('door2Push', 1.00), state: win(REST) },
-    { t: A('through', 1.00), state: win(REVEAL_CY) },
-    { t: A('goalHold', 1.00), state: win(REVEAL_CY, 0.45) },     // gets the ball → firework
-    { t: A('endHold', 1.00), state: win(REVEAL_CY, 1) },
+    ...seqFullDanceKF(A, base, zero),
+    // gather into the SQUARE (faces), then spin FULLY VISIBLE → square, swapped
+    { t: A('gather', 1.00),       state: { ...base, pills: allFace } },
+    { t: A('orbit1', 1.00),       state: { ...base, pills: allFace } },
+    { t: A('squarePause', 1.00),  state: { ...base, pills: allFace } },
+    // flip to BACKS in place
+    { t: A('flip', 0.10), state: { ...base, pills: allFace } },
+    { t: A('flip', 0.34), state: { ...base, pills: allTurn45 } },
+    { t: A('flip', 0.56), state: { ...base, pills: allTurn90 } },
+    { t: A('flip', 0.78), state: { ...base, pills: allTurn135 } },
+    { t: A('flip', 1.00), state: { ...base, pills: allBack } },
+    { t: A('flipHold', 1.00),     state: { ...base, pills: allBack } },
+    // keep spinning (as backs) → DIAMOND (winner lands at the bottom)
+    { t: A('orbit2', 1.00),       state: { ...base, pills: allBack } },
+    { t: A('diamondPause', 1.00), state: { ...base, pills: allBack } },
+    // flip BACK to faces, in the diamond
+    { t: A('flipBack', 0.10), state: { ...base, pills: allBack } },
+    { t: A('flipBack', 0.34), state: { ...base, pills: allTurn135 } },
+    { t: A('flipBack', 0.56), state: { ...base, pills: allTurn90 } },
+    { t: A('flipBack', 0.78), state: { ...base, pills: allTurn45 } },
+    { t: A('flipBack', 1.00), state: { ...base, pills: allFace } },
+    { t: A('facePause', 1.00),    state: { ...base, pills: allFace } },
+    // the bottom (winning) pill descends, fights the door (vibration is procedural
+    // in computeStateSeqTrial, matching classic — see pulse1/pulse2/preSpit there)
+    { t: A('descend', 1.00),      state: win(REST) },
+    { t: A('preSpit', 1.00),      state: win(REST) },
+    { t: A('through', 1.00),      state: win(REVEAL_CY) },
+    { t: A('goalHold', 1.00),     state: win(REVEAL_CY, 0.45) },     // gets the ball → firework
+    { t: A('endHold', 1.00),      state: win(REVEAL_CY, 1) },
   ];
   return kf.filter(k => k && k.t !== undefined);
 }
@@ -3278,6 +3377,8 @@ function buildKeyframesSeqTrial(branchKey) {
 function computeStateSeqTrial(kf, EXIT_SLOT, t) {
   const P = PH_SEQ_TRIAL;
   const WIN = TRIAL_WINNER[currentBranch] != null ? TRIAL_WINNER[currentBranch] : 0;
+  const pillKinds = ['happy', 'happy', 'angry', 'angry'];
+  const winKind = pillKinds[WIN];
   let state = stateAtTime(kf, t);
   { const BY = REVEAL_CY + 60;
     state = { ...state, ballX: REVEAL_CX, ballY: t < P.through.t0 ? BY + 12 : BY - 12, doorFrac: 0 }; }
@@ -3287,44 +3388,82 @@ function computeStateSeqTrial(kf, EXIT_SLOT, t) {
   const OCY = ARENA_CY - ANIM.orbit.lift;
   const posAt = deg => ({ x: CX + R * Math.cos(deg * D2R), y: OCY + R * Math.sin(deg * D2R) });
   const slotX = [-180, -105, 105, 180].map(d => CX + d);
-  const baseAng = [180, 270, 90, 0];
-  const totalSpin = ANIM.orbit.turns * 360;                    // whole turns → lands back where it started
-  // flat 2×2 grid: slots 0,1 = left column (yellows), 2,3 = right column (reds)
-  const GX = 78, GY = 52;
-  const grid = [ { x: CX - GX, y: OCY - GY }, { x: CX - GX, y: OCY + GY }, { x: CX + GX, y: OCY - GY }, { x: CX + GX, y: OCY + GY } ];
-  const REST = TUBE_TOP - 41.5;
-  const PUSH = 12;
-  function doorStage(tt) {
-    if (tt < P.door1Push.t0) return { dy: 0, bend: 0, frac: 0 };
-    if (tt < P.door1Push.t1) { const u = (tt - P.door1Push.t0) / P.door1Push.dur; const e = Math.sin(Math.PI / 2 * u); return { dy: PUSH * e, bend: e, frac: 0 }; }
-    if (tt < P.door1Recoil.t1) { const u = (tt - P.door1Recoil.t0) / P.door1Recoil.dur; const dy = u < 0.5 ? lerp(PUSH, -10, easeInOut(u / 0.5)) : lerp(-10, 0, (u - 0.5) / 0.5); return { dy, bend: Math.max(0, 1 - Math.min(1, u * 2)), frac: 0 }; }
-    if (tt < P.door2Push.t1) { const u = (tt - P.door2Push.t0) / P.door2Push.dur; const e = Math.sin(Math.PI / 2 * Math.min(1, u * 1.05)); return { dy: PUSH * e, bend: Math.min(1, u * 1.3), frac: u > 0.7 ? (u - 0.7) / 0.3 : 0 }; }
-    return { dy: PUSH, bend: 1, frac: 1 };
-  }
-  const descY = tt => { const y0 = OCY + R; const u = Math.min(1, Math.max(0, (tt - P.descend.t0) / P.descend.dur)); return y0 + (REST - y0) * u * u; };
-  // settled position of slot i (after the orbit lands into the 2×2 grid)
-  const settledOf = i => {
-    if (t < P.orbit.t1) return posAt(baseAng[i] + totalSpin * easeInOut((t - P.orbit.t0) / P.orbit.dur));
-    if (t < P.settle.t1) { const u = easeInOut((t - P.settle.t0) / P.settle.dur); const c = posAt(baseAng[i] + totalSpin); return { x: lerp(c.x, grid[i].x, u), y: lerp(c.y, grid[i].y, u) }; }
-    return grid[i];
+  // Ring angles for a SQUARE (corners): yellows (0,1) start in the LEFT column,
+  // reds (2,3) in the RIGHT column — the train/test formation.
+  const baseAng = [225, 135, 315, 45];
+  const TURNS = ANIM.orbit.turns;
+  // orbit1: whole turns + 180° → lands back in a square, but the two columns
+  // have swapped sides (nothing that started left ends left; likewise right).
+  const spin1 = TURNS * 360 + 180;
+  // orbit2: whole turns + just enough extra to bring the WINNER to the diamond's
+  // bottom (90°), over the tube; the other three take the remaining points.
+  const afterOrbit1 = baseAng[WIN] + spin1;
+  const delta = (((90 - afterOrbit1) % 360) + 360) % 360;       // forward turn → winner at bottom
+  const spin2 = TURNS * 360 + delta;
+  // Cumulative ring rotation added to baseAng at time t.
+  const spinAt = tt => {
+    if (tt < P.orbit1.t0) return 0;
+    if (tt < P.orbit1.t1) return spin1 * easeInOut((tt - P.orbit1.t0) / P.orbit1.dur);
+    if (tt < P.orbit2.t0) return spin1;                          // squarePause / flip / flipHold hold the square
+    if (tt < P.orbit2.t1) return spin1 + spin2 * easeInOut((tt - P.orbit2.t0) / P.orbit2.dur);
+    return spin1 + spin2;                                        // diamondPause onward hold the diamond
   };
   const posOf = i => {
     if (t < P.gather.t1) { const u = easeInOut((t - P.gather.t0) / P.gather.dur); const c = posAt(baseAng[i]); return { x: lerp(slotX[i], c.x, u), y: lerp(CY, c.y, u) }; }
-    if (t < P.orbit.t0) return posAt(baseAng[i]);
-    return settledOf(i);
+    return posAt(baseAng[i] + spinAt(t));
   };
   state = { ...state, pillOffsets: [0, 1, 2, 3].map(i => { const p = posOf(i); return { dx: p.x - slotX[i], dy: p.y - CY }; }) };
 
-  // The winning pill: slides from its grid cell to the tube, then descends + fights the door.
+  const REST = TUBE_TOP - 41.5;
+  const descY = tt => { const y0 = OCY + R; const u = Math.min(1, Math.max(0, (tt - P.descend.t0) / P.descend.dur)); return y0 + (REST - y0) * u * u; };
+
+  // The winner sits at the diamond's bottom (over the tube); once it starts to
+  // descend it leaves the arena and is drawn as the on-top tube pill — nulled
+  // out of pills[] permanently from here on so it's never double-drawn.
   let doorFrac = 0, doorBend = 0;
-  if (t >= P.slideIn.t0) {
-    let wy;
-    if (t < P.slideIn.t1) { const u = easeInOut((t - P.slideIn.t0) / P.slideIn.dur); const g = grid[WIN]; wy = lerp(g.y, OCY + R, u); }
-    else if (t < P.descend.t1) wy = descY(t);
-    else { const ds = doorStage(t); wy = REST + ds.dy; doorBend = ds.bend; doorFrac = ds.frac; }
-    let wx = CX;
-    if (t < P.slideIn.t1) { const u = easeInOut((t - P.slideIn.t0) / P.slideIn.dur); wx = lerp(grid[WIN].x, CX, u); }
-    state = { ...state, exitY: wy, exitX: wx, exitRot: 0, tubePillY: wy };
+  if (t >= P.descend.t0) {
+    state = { ...state, pills: state.pills.map((p, i) => i === WIN ? null : p), revealedPill: winKind, exitX: CX };
+  }
+  // Door struggle matches classic verbatim (pulse1/pulse2 brief buzzes, then a
+  // sustained building preSpit struggle) — applied here to exitY/tubePillY
+  // (trial's pill is always shown face-up via the on-top render, never the
+  // tube-silhouette path, so this is gated on the phase window directly).
+  if (t >= P.descend.t0 && t < P.through.t0) {
+    let wy = t < P.descend.t1 ? descY(t) : REST;
+    let shakeX = 0;
+    for (const ph of [P.pulse1, P.pulse2]) {
+      if (t >= ph.t0 && t < ph.t1) {
+        const tau = t - ph.t0, dur = ph.dur;
+        const env = Math.sin(Math.PI * tau / dur);
+        const pushSin = Math.max(0, Math.sin(2 * Math.PI * 5 * tau));
+        wy += 11 * env * pushSin;
+        shakeX = ANIM.suspense.amp * 0.55 * env * Math.sin(2 * Math.PI * 9 * tau);
+        doorBend = Math.max(doorBend, env * pushSin);
+      }
+    }
+    if (t >= P.preSpit.t0 && t < P.spit.t0) {
+      const tau = t - P.preSpit.t0, dur = P.spit.t0 - P.preSpit.t0, u = tau / dur;
+      const pushAmp = 11, env = 0.30 + 0.40 * Math.pow(u, 1.6);
+      const f0 = 4, f1 = 16;
+      const chirpPhase = 2 * Math.PI * (f0 * tau + 0.5 * (f1 - f0) / dur * tau * tau);
+      const pushSin = Math.max(0, Math.sin(chirpPhase));
+      wy += pushAmp * env * pushSin;
+      shakeX = ANIM.suspense.amp * env * Math.sin(2 * Math.PI * (6 * tau + 0.5 * 16 / dur * tau * tau));
+      doorBend = Math.max(doorBend, env * pushSin);
+    }
+    const VIBE_AMP = 2;
+    for (const ph of [P.pulse1, P.pulse2]) {
+      if (t >= ph.t0 && t < ph.t1) { const tau = t - ph.t0, dur = ph.dur; const env = Math.sin(Math.PI * tau / dur);
+        shakeX += VIBE_AMP * env * Math.sin(2 * Math.PI * 14 * tau); }
+    }
+    if (t >= P.preSpit.t0 && t < P.spit.t0) {
+      const tau = t - P.preSpit.t0, dur = P.spit.t0 - P.preSpit.t0, u = tau / dur;
+      const env = 0.25 + 0.35 * Math.pow(u, 1.6); const f0 = 10, f1 = 18;
+      const phase = 2 * Math.PI * (f0 * tau + 0.5 * (f1 - f0) / dur * tau * tau);
+      shakeX += VIBE_AMP * env * Math.sin(phase);
+    }
+    if (t >= P.spit.t0) doorFrac = Math.min(1, (t - P.spit.t0) / 0.12);
+    state = { ...state, exitY: wy, exitRot: 0, tubePillY: wy, tubeShakeX: shakeX };
   }
   if (t >= P.through.t0) doorFrac = 1;
   state = { ...state, doorFrac, doorBend };
@@ -3419,7 +3558,9 @@ function computeStateSeqIntro(kf, EXIT_SLOT, t) {
   const OCY = ARENA_CY - ANIM.orbit.lift;
   const posAt = deg => ({ x: CX + R * Math.cos(deg * D2R), y: OCY + R * Math.sin(deg * D2R) });
   const slotX = [-180, -105, 105, 180].map(d => CX + d);
-  const baseAng = [180, 270, 90, 0];
+  // Flat SQUARE (not a diamond) — same corners as the classic/test formations:
+  // yellows (0,1) left column, reds (2,3) right column.
+  const baseAng = [135, 225, 315, 45];
   const totalSpin = ANIM.orbit.turns * 360 + 90;                              // extra quarter turn → land in NEW spots
   const posOf = i => {
     if (t < P.gather.t1) { const u = easeInOut((t - P.gather.t0) / P.gather.dur); const c = posAt(baseAng[i]); return { x: lerp(slotX[i], c.x, u), y: lerp(CY, c.y, u) }; }
@@ -3448,11 +3589,12 @@ function renderFrame(t) {
   scrub.value = t;
 }
 
-function playAnimation(branchKey, startAt = 0) {
+async function playAnimation(branchKey, startAt = 0) {
+  if (!window.framesReady()) await waitForFrames();  // don't start until pill art has loaded
   const cfg = CFG[branchKey] || CFG.visual;
   // Familiarization trials are inherently the Sequential presentation — force it so
   // they play correctly no matter which mode the Classic/Sequential toggle is on.
-  if (branchKey === 'trial0' || branchKey === 'trial1' || branchKey === 'trial2') setLotteryMode('seq');
+  if (branchKey === 'trial1' || branchKey === 'trial2') setLotteryMode('seq');
   currentBranch = branchKey;                          // set before seqIsTrial()/keyframe build
   if (lotteryMode === 'occlusion') {
     const rmap = rPrepare(branchKey);
@@ -3619,20 +3761,26 @@ const SOUND_CUES_SEQ = [
   { cue: 'ding',     beat: 'revealHold', offset: 0.50, type: 'oneshot' },
   { cue: 'ding',     beat: 'revealHold', offset: 0.96, type: 'oneshot' },
   { cue: 'ding',     beat: 'revealHold', offset: 1.42, type: 'oneshot' },
+  { cue: 'flip',     beat: 'rehide',      type: 'oneshot' },                  // sides flip back to hidden
   { cue: 'tubeSlide', beat: 'descend',    type: 'oneshot' },                  // slide whistle
-  { cue: 'collision', beat: 'door1Push', offset: 0.30, type: 'oneshot' },     // thud — attempt 1 fails
-  { cue: 'collision', beat: 'door2Push', offset: 0.30, type: 'oneshot' },     // thud — attempt 2
-  { cue: 'pop',      beat: 'through',     type: 'oneshot' },                  // bursts through to the ball
+  { cue: 'vibratePulse', beat: 'pulse1', type: 'oneshot' },                   // pulse 1 — brief buzz, door bows
+  { cue: 'vibratePulse', beat: 'pulse2', type: 'oneshot' },                   // pulse 2 — brief buzz, door bows
+  { cue: 'vibrate',  beat: 'preSpit',     type: 'oneshot' },                  // building struggle rattle
+  { cue: 'pop',      beat: 'spit',        type: 'oneshot' },                  // door SNAPS open
   { cue: 'revealChime', beat: 'flipReveal', type: 'oneshot' },               // turns + firework + chime
 ];
 const SOUND_CUES_SEQ_TRIAL = [
   { cue: 'happySeq', beat: 'yellowDance', type: 'oneshot' },                  // full dance kept for the demo
   { cue: 'angrySeq', beat: 'redDance',    type: 'oneshot' },
-  { cue: 'orbit',    beat: 'orbit',       type: 'oneshot' },
+  { cue: 'orbit',    beat: 'orbit1',      type: 'oneshot' },                  // visible spin whoosh
+  { cue: 'flip',     beat: 'flip',   offset: 0.2, type: 'oneshot' },          // flip to backs
+  { cue: 'orbit',    beat: 'orbit2',      type: 'oneshot' },                  // spin as backs whoosh
+  { cue: 'flip',     beat: 'flipBack', offset: 0.2, type: 'oneshot' },        // flip back to faces
   { cue: 'tubeSlide', beat: 'descend',    type: 'oneshot' },
-  { cue: 'collision', beat: 'door1Push', offset: 0.30, type: 'oneshot' },
-  { cue: 'collision', beat: 'door2Push', offset: 0.30, type: 'oneshot' },
-  { cue: 'pop',      beat: 'through',     type: 'oneshot' },
+  { cue: 'vibratePulse', beat: 'pulse1', type: 'oneshot' },                   // pulse 1 — brief buzz, door bows
+  { cue: 'vibratePulse', beat: 'pulse2', type: 'oneshot' },                   // pulse 2 — brief buzz, door bows
+  { cue: 'vibrate',  beat: 'preSpit',     type: 'oneshot' },                  // building struggle rattle
+  { cue: 'pop',      beat: 'spit',        type: 'oneshot' },                  // door SNAPS open
   { cue: 'revealChime', beat: 'goalHold', offset: 0.10, type: 'oneshot' },    // gets the ball + firework
 ];
 const SOUND_CUES_SEQ_INTRO = [
@@ -4037,7 +4185,6 @@ const EXPORT_MOVIES = [
   { branch: 'baseline',    mode: 'occlusion', filename: 'NoDeduction__Occlusion',                    label: 'No Deduction\nOcclusion' },
   { branch: 'supports',    mode: 'occlusion', filename: 'SupportedByDeduction__Occlusion',           label: 'Supported by Deduction\nOcclusion' },
   { branch: 'contradicts', mode: 'occlusion', filename: 'ContradictedByDeduction__Occlusion',        label: 'Contradicted by Deduction\nOcclusion' },
-  { branch: 'trial0',      mode: 'seq',       filename: 'Familiarization0_Intro__Sequential',        label: 'Familiarization 0 · Intro\nSequential' },
   { branch: 'trial1',      mode: 'seq',       filename: 'Familiarization1_YellowWins__Sequential',   label: 'Familiarization 1 · Yellow\nSequential' },
   { branch: 'trial2',      mode: 'seq',       filename: 'Familiarization2_RedWins__Sequential',      label: 'Familiarization 2 · Red\nSequential' },
   { branch: 'visual',      mode: 'seq',       filename: 'Visual__Sequential',                        label: 'Visual\nSequential' },
